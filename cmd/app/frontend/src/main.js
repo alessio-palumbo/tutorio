@@ -95,6 +95,7 @@ window.runtime?.EventsOn?.('pipeline:progress', update => {
   progress.hidden = false
   progress.querySelector('div').style.width = `${percent}%`
 	if (update.stage === 'complete') setTimeout(() => { progress.hidden = true }, 1200)
+	if (update.stage === 'failed' || update.stage === 'cancelled') progress.hidden = true
 	clearTimeout(jobRefreshTimer);jobRefreshTimer=setTimeout(()=>{loadJobs();if(update.stage==='complete')loadGuides()},250)
 })
 loadGuides()

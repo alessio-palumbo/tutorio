@@ -3,6 +3,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -141,10 +142,20 @@ func (p *Pipeline) updateJob(ctx context.Context, job *Job, stage string, curren
 	_ = p.store.Update(ctx, *job)
 }
 func (p *Pipeline) fail(ctx context.Context, job *Job, err error) error {
+	if errors.Is(err, context.Canceled) {
+		job.Status = StatusCancelled
+		job.Stage = "cancelled"
+		job.Error = ""
+		job.UpdatedAt = time.Now().UTC()
+		_ = p.store.Update(ctx, *job)
+		p.report(ctx, "cancelled", "Compilation cancelled.", job.Current, job.Total)
+		return err
+	}
 	job.Status = StatusFailed
 	job.Error = err.Error()
 	job.UpdatedAt = time.Now().UTC()
 	_ = p.store.Update(ctx, *job)
+	p.report(ctx, "failed", err.Error(), job.Current, job.Total)
 	return err
 }
 

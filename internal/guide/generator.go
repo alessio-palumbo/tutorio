@@ -212,24 +212,38 @@ func normalizeTimestampArray(value map[string]any, field string) {
 }
 
 func normalizeTimestampObject(value map[string]any) {
-	if _, ok := value["start_seconds"]; !ok {
-		value["start_seconds"] = value["start"]
+	start, startOK := timestampSeconds(firstValue(value, "start_seconds", "start", "start_time", "timestamp", "time"))
+	end, endOK := timestampSeconds(firstValue(value, "end_seconds", "end", "end_time"))
+	if !startOK && endOK {
+		start = end
 	}
-	if _, ok := value["end_seconds"]; !ok {
-		value["end_seconds"] = value["end"]
+	if !endOK {
+		end = start
 	}
-	for _, field := range []string{"start_seconds", "end_seconds"} {
-		if text, ok := value[field].(string); ok {
-			if seconds, valid := parseSeconds(text); valid {
-				value[field] = seconds
-			}
+	value["start_seconds"] = start
+	value["end_seconds"] = end
+	if _, ok := value["label"].(string); !ok {
+		value["label"] = ""
+	}
+}
+
+func firstValue(value map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if item, ok := value[key]; ok && item != nil {
+			return item
 		}
 	}
-	if value["end_seconds"] == nil {
-		value["end_seconds"] = value["start_seconds"]
-	}
-	if value["label"] == nil {
-		value["label"] = ""
+	return nil
+}
+
+func timestampSeconds(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case string:
+		return parseSeconds(strings.TrimSpace(typed))
+	default:
+		return 0, false
 	}
 }
 func parseSeconds(value string) (float64, bool) {

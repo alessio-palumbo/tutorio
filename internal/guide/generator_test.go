@@ -40,7 +40,7 @@ func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
 }
 
 func TestNormalizeGuideJSONWrapsSingleObjects(t *testing.T) {
-	raw := `{"title":"Lesson","steps":{"number":1,"title":"Start","explanation":"Go","timestamps":12},"prerequisites":[{"title":"Install Go","explanation":"Version 1.25 or newer"}],"warnings":[{"warning":"Back up first","details":"The operation is destructive"}],"common_mistakes":[{"mistake":"Skipping tests","correction":"Run the suite"}],"appendix":[{}, {"title":"Reference","content":"Details"}],"cheat_sheet":[{}, {"Save":"Cmd+S","Tools":["B: Blade","A: Select"]}],"source_timestamps":[30,"00:01:00"],"commands":["go test ./..."],"keyboard_shortcuts":["Cmd+S"]}`
+	raw := `{"title":"Lesson","steps":{"number":1,"title":"Start","explanation":"Go","timestamps":12},"prerequisites":[{"title":"Install Go","explanation":"Version 1.25 or newer"}],"warnings":[{"warning":"Back up first","details":"The operation is destructive"}],"common_mistakes":[{"mistake":"Skipping tests","correction":"Run the suite"}],"appendix":[{}, {"title":"Reference","content":"Details"}],"cheat_sheet":[{}, {"Save":"Cmd+S","Tools":["B: Blade","A: Select"]}],"source_timestamps":[30,"00:01:00",{"start_seconds":"00:02:00","end_seconds":"not supplied","label":"Fallback end"}],"commands":["go test ./..."],"keyboard_shortcuts":["Cmd+S"]}`
 	normalized, err := normalizeGuideJSON(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestNormalizeGuideJSONWrapsSingleObjects(t *testing.T) {
 	if got.Prerequisites[0] != "Install Go — Version 1.25 or newer" || got.Warnings[0] != "Back up first — The operation is destructive" || got.CommonMistakes[0] != "Skipping tests — Run the suite" {
 		t.Fatalf("structured lists were not made readable: %#v %#v %#v", got.Prerequisites, got.Warnings, got.CommonMistakes)
 	}
-	if len(got.SourceTimestamps) != 2 || got.SourceTimestamps[1].StartSeconds != 60 {
+	if len(got.SourceTimestamps) != 3 || got.SourceTimestamps[1].StartSeconds != 60 || got.SourceTimestamps[2].StartSeconds != 120 || got.SourceTimestamps[2].EndSeconds != 120 {
 		t.Fatalf("unexpected timestamps: %#v", got.SourceTimestamps)
 	}
 	if len(got.Commands) != 1 || got.Commands[0].Value != "go test ./..." {
