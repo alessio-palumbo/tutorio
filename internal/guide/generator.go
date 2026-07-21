@@ -21,6 +21,7 @@ type GenerateRequest struct {
 	Segments   []transcript.Segment
 	OnProgress func(current, total int)
 	OnSegment  func(result SectionResult)
+	OnFailure  func(result SectionResult)
 }
 type SectionResult struct {
 	Index                int
@@ -30,6 +31,8 @@ type SectionResult struct {
 	PromptTokens         int
 	OutputTokens         int
 	DurationMilliseconds int64
+	RawResponse          string
+	Error                string
 }
 type Generator interface {
 	Generate(ctx context.Context, request GenerateRequest) (Guide, error)
@@ -59,7 +62,13 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 	metadata := Generation{SegmentCount: len(req.Segments), ContextWindow: g.contextSize, MaxOutputTokens: g.maxTokens}
 	for index, segment := range req.Segments {
 		partial, metrics, err := g.generateSegment(ctx, req.Title, segment, index+1, len(req.Segments))
+		metrics.Index = segment.Index
+		metrics.Segment = segment
 		if err != nil {
+			metrics.Error = err.Error()
+			if req.OnFailure != nil {
+				req.OnFailure(metrics)
+			}
 			return Guide{}, fmt.Errorf("generate section %d of %d: %w", index+1, len(req.Segments), err)
 		}
 		partials = append(partials, partial)
@@ -68,8 +77,6 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 		metadata.OutputTokens += metrics.OutputTokens
 		metadata.DurationMilliseconds += metrics.DurationMilliseconds
 		if req.OnSegment != nil {
-			metrics.Index = index
-			metrics.Segment = segment
 			metrics.Guide = partial
 			req.OnSegment(metrics)
 		}
@@ -101,13 +108,14 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
+	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond), RawResponse: response.Content}
 	var result Guide
 	normalized, err := normalizeGuideJSON(response.Content)
 	if err != nil {
-		return Guide{}, SectionResult{}, fmt.Errorf("normalize generated guide: %w", err)
+		return Guide{}, metrics, fmt.Errorf("normalize generated guide: %w", err)
 	}
 	if err := json.Unmarshal(normalized, &result); err != nil {
-		return Guide{}, SectionResult{}, fmt.Errorf("decode generated guide: %w", err)
+		return Guide{}, metrics, fmt.Errorf("decode generated guide: %w", err)
 	}
 	for index := range result.Steps {
 		result.Steps[index].ID = fmt.Sprintf("step_%d_%d", segment.Index, index+1)
@@ -115,7 +123,6 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	}
 	anchorGuideTimestamps(&result, segment)
 	validateSourceExcerpts(&result, segment.Text)
-	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond)}
 	return result, metrics, nil
 }
 

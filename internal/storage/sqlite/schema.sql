@@ -46,5 +46,7 @@ CREATE TABLE IF NOT EXISTS job_segments (
     prompt_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
     duration_ms INTEGER NOT NULL DEFAULT 0,
+    raw_response TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
     PRIMARY KEY(job_id, segment_index)
 );

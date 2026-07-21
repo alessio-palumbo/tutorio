@@ -99,6 +99,9 @@ func (a *App) RegenerateSection(id string, index int) (guide.Guide, error) {
 	return a.pipeline.RegenerateSection(a.context(), id, index)
 }
 func (a *App) ListJobs() ([]jobs.Job, error) { return a.pipeline.Jobs(a.context()) }
+func (a *App) GetJobSections(id string) ([]jobs.Segment, error) {
+	return a.pipeline.JobSections(a.context(), id)
+}
 func (a *App) RetryJob(id string) (jobs.Job, error) {
 	if a.manager == nil {
 		return jobs.Job{}, fmt.Errorf("background job manager is not configured")

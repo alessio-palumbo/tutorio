@@ -42,6 +42,8 @@ type Segment struct {
 	PromptTokens         int                `json:"prompt_tokens,omitempty"`
 	OutputTokens         int                `json:"output_tokens,omitempty"`
 	DurationMilliseconds int64              `json:"duration_milliseconds,omitempty"`
+	RawResponse          string             `json:"raw_response,omitempty"`
+	Error                string             `json:"error,omitempty"`
 }
 
 type Store interface {
@@ -49,6 +51,7 @@ type Store interface {
 	Update(ctx context.Context, job Job) error
 	SaveSegments(ctx context.Context, jobID string, segments []transcript.Segment) error
 	CompleteSegment(ctx context.Context, segment Segment) error
+	RecordSegmentFailure(ctx context.Context, segment Segment) error
 	Get(ctx context.Context, id string) (Job, error)
 	List(ctx context.Context, limit int) ([]Job, error)
 	Segments(ctx context.Context, jobID string) ([]Segment, error)
@@ -59,6 +62,7 @@ func (discardStore) Create(context.Context, Job) error                          
 func (discardStore) Update(context.Context, Job) error                                { return nil }
 func (discardStore) SaveSegments(context.Context, string, []transcript.Segment) error { return nil }
 func (discardStore) CompleteSegment(context.Context, Segment) error                   { return nil }
+func (discardStore) RecordSegmentFailure(context.Context, Segment) error              { return nil }
 func (discardStore) Get(context.Context, string) (Job, error)                         { return Job{}, nil }
 func (discardStore) List(context.Context, int) ([]Job, error)                         { return nil, nil }
 func (discardStore) Segments(context.Context, string) ([]Segment, error)              { return nil, nil }

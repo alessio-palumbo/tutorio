@@ -91,3 +91,20 @@ func TestValidateSourceExcerptsRejectsUnsupportedText(t *testing.T) {
 		t.Fatalf("kept unsupported excerpt: %#v", value.Steps)
 	}
 }
+
+type malformedProvider struct{}
+
+func (malformedProvider) Complete(context.Context, llm.Request) (llm.Response, error) {
+	return llm.Response{Model: "test-model", Content: `{"steps":`}, nil
+}
+
+func TestGeneratorReportsRawResponseWhenSectionCannotDecode(t *testing.T) {
+	var failure SectionResult
+	_, err := NewLLMGenerator(malformedProvider{}).Generate(context.Background(), GenerateRequest{Title: "Lesson", Segments: []transcript.Segment{{Index: 3, Text: "source"}}, OnFailure: func(result SectionResult) { failure = result }})
+	if err == nil {
+		t.Fatal("expected malformed response to fail")
+	}
+	if failure.Index != 3 || failure.Model != "test-model" || failure.RawResponse != `{"steps":` || failure.Error == "" {
+		t.Fatalf("missing failure diagnostics: %#v", failure)
+	}
+}

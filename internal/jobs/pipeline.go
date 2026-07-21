@@ -99,7 +99,9 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 		p.report(ctx, "generating", fmt.Sprintf("Generating section %d of %d…", current, total), current, total)
 		p.updateJob(ctx, &job, "generating", current, total)
 	}, OnSegment: func(result guide.SectionResult) {
-		_ = p.store.CompleteSegment(ctx, Segment{JobID: job.ID, Index: result.Index, Transcript: result.Segment, Guide: result.Guide, Status: StatusCompleted, Model: result.Model, PromptTokens: result.PromptTokens, OutputTokens: result.OutputTokens, DurationMilliseconds: result.DurationMilliseconds})
+		_ = p.store.CompleteSegment(ctx, segmentResult(job.ID, result, StatusCompleted))
+	}, OnFailure: func(result guide.SectionResult) {
+		_ = p.store.RecordSegmentFailure(ctx, segmentResult(job.ID, result, StatusFailed))
 	}})
 	if err != nil {
 		return guide.Guide{}, p.fail(ctx, &job, fmt.Errorf("generation stage: %w", err))
@@ -189,7 +191,9 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 		section := &sections[index]
 		if section.Status != StatusCompleted || len(section.Guide.Steps) == 0 {
 			p.report(ctx, "generating", fmt.Sprintf("Retrying section %d of %d…", index+1, len(sections)), index, len(sections))
-			generated, generationErr := p.generator.Generate(ctx, guide.GenerateRequest{Title: title, SourceType: job.SourceType, SourceURI: job.SourceURI, Segments: []transcript.Segment{section.Transcript}})
+			generated, generationErr := p.generator.Generate(ctx, guide.GenerateRequest{Title: title, SourceType: job.SourceType, SourceURI: job.SourceURI, Segments: []transcript.Segment{section.Transcript}, OnFailure: func(result guide.SectionResult) {
+				_ = p.store.RecordSegmentFailure(ctx, segmentResult(job.ID, result, StatusFailed))
+			}})
 			if generationErr != nil {
 				return guide.Guide{}, p.fail(ctx, &job, generationErr)
 			}
@@ -245,6 +249,10 @@ func (p *Pipeline) Sections(ctx context.Context, guideID string) ([]Segment, err
 		return []Segment{}, nil
 	}
 	return p.store.Segments(ctx, stored.Generation.JobID)
+}
+
+func (p *Pipeline) JobSections(ctx context.Context, jobID string) ([]Segment, error) {
+	return p.store.Segments(ctx, jobID)
 }
 
 func (p *Pipeline) SaveGuide(ctx context.Context, value guide.Guide) (guide.Guide, error) {
@@ -370,4 +378,8 @@ func sectionSafeSteps(saved []guide.Step, sections []Segment, regenerated int) [
 		}
 	}
 	return result
+}
+
+func segmentResult(jobID string, result guide.SectionResult, status Status) Segment {
+	return Segment{JobID: jobID, Index: result.Index, Transcript: result.Segment, Guide: result.Guide, Status: status, Model: result.Model, PromptTokens: result.PromptTokens, OutputTokens: result.OutputTokens, DurationMilliseconds: result.DurationMilliseconds, RawResponse: result.RawResponse, Error: result.Error}
 }

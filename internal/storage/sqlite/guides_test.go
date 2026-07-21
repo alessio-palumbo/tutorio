@@ -54,14 +54,14 @@ func TestJobStorePersistsSegmentsAndMetrics(t *testing.T) {
 	if err = store.SaveSegments(context.Background(), job.ID, segments); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.CompleteSegment(context.Background(), jobs.Segment{JobID: job.ID, Index: 0, Transcript: segments[0], Guide: guide.Guide{Title: "Part"}, Status: jobs.StatusCompleted, Model: "test", PromptTokens: 10, OutputTokens: 20, DurationMilliseconds: 30}); err != nil {
+	if err = store.CompleteSegment(context.Background(), jobs.Segment{JobID: job.ID, Index: 0, Transcript: segments[0], Guide: guide.Guide{Title: "Part"}, Status: jobs.StatusCompleted, Model: "test", PromptTokens: 10, OutputTokens: 20, DurationMilliseconds: 30, RawResponse: `{"title":"Part"}`}); err != nil {
 		t.Fatal(err)
 	}
 	stored, err := store.Segments(context.Background(), job.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stored) != 1 || stored[0].OutputTokens != 20 || stored[0].Guide.Title != "Part" {
+	if len(stored) != 1 || stored[0].OutputTokens != 20 || stored[0].Guide.Title != "Part" || stored[0].RawResponse != `{"title":"Part"}` {
 		t.Fatalf("unexpected segments: %#v", stored)
 	}
 }

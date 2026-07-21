@@ -55,6 +55,7 @@ func (s *managerStore) Update(_ context.Context, job Job) error {
 }
 func (*managerStore) SaveSegments(context.Context, string, []transcript.Segment) error { return nil }
 func (*managerStore) CompleteSegment(context.Context, Segment) error                   { return nil }
+func (*managerStore) RecordSegmentFailure(context.Context, Segment) error              { return nil }
 func (s *managerStore) Get(_ context.Context, id string) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

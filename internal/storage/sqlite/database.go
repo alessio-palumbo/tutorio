@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -23,5 +24,18 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply sqlite schema: %w", err)
 	}
+	for _, statement := range []string{
+		`ALTER TABLE job_segments ADD COLUMN raw_response TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE job_segments ADD COLUMN error TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, migrationErr := db.ExecContext(ctx, statement); migrationErr != nil && !isDuplicateColumn(migrationErr) {
+			db.Close()
+			return nil, fmt.Errorf("upgrade sqlite schema: %w", migrationErr)
+		}
+	}
 	return db, nil
+}
+
+func isDuplicateColumn(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "duplicate column name")
 }
