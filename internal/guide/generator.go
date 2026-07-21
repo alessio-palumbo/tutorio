@@ -108,6 +108,10 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	if err := json.Unmarshal(normalized, &result); err != nil {
 		return Guide{}, SectionResult{}, fmt.Errorf("decode generated guide: %w", err)
 	}
+	for index := range result.Steps {
+		result.Steps[index].ID = fmt.Sprintf("step_%d_%d", segment.Index, index+1)
+		result.Steps[index].SourceSegment = segment.Index
+	}
 	anchorGuideTimestamps(&result, segment)
 	validateSourceExcerpts(&result, segment.Text)
 	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond)}

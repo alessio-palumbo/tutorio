@@ -9,7 +9,10 @@ type Timestamp struct {
 	Label        string  `json:"label"`
 }
 type Step struct {
+	ID            string      `json:"id,omitempty"`
 	Number        int         `json:"number"`
+	SourceSegment int         `json:"source_segment"`
+	UserEdited    bool        `json:"user_edited,omitempty"`
 	Title         string      `json:"title"`
 	Explanation   string      `json:"explanation"`
 	Actions       []string    `json:"actions"`

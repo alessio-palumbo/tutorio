@@ -21,7 +21,7 @@ func (p *sequenceProvider) Complete(context.Context, llm.Request) (llm.Response,
 func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
 	provider := &sequenceProvider{}
 	progress := 0
-	got, err := NewLLMGenerator(provider).Generate(context.Background(), GenerateRequest{Title: "Lesson", Segments: []transcript.Segment{{Text: "one"}, {Text: "two"}}, OnProgress: func(current, total int) { progress = current }})
+	got, err := NewLLMGenerator(provider).Generate(context.Background(), GenerateRequest{Title: "Lesson", Segments: []transcript.Segment{{Index: 0, Text: "one"}, {Index: 1, Text: "two"}}, OnProgress: func(current, total int) { progress = current }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +30,9 @@ func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
 	}
 	if len(got.Steps) != 2 || got.Steps[1].Number != 2 {
 		t.Fatalf("unexpected merged steps: %#v", got.Steps)
+	}
+	if got.Steps[0].ID != "step_0_1" || got.Steps[1].ID != "step_1_1" || got.Steps[1].SourceSegment != 1 {
+		t.Fatalf("unexpected step provenance: %#v", got.Steps)
 	}
 	if progress != 2 {
 		t.Fatalf("got progress %d", progress)

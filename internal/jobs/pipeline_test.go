@@ -43,3 +43,30 @@ func TestPipelineRunsStages(t *testing.T) {
 		t.Fatalf("unexpected guide: %#v", got)
 	}
 }
+
+func TestMarkEditedSteps(t *testing.T) {
+	previous := []guide.Step{{ID: "step_0_1", Title: "Original", Actions: []string{"one"}}}
+	updated := []guide.Step{{ID: "step_0_1", Title: "Revised", Actions: []string{"one"}}}
+	markEditedSteps(previous, updated)
+	if !updated[0].UserEdited {
+		t.Fatal("changed step was not marked as user edited")
+	}
+}
+
+func TestSectionSafeStepsPreservesEditsOutsideRegeneratedSection(t *testing.T) {
+	saved := []guide.Step{
+		{ID: "step_0_1", SourceSegment: 0, Title: "Manual title", UserEdited: true},
+		{ID: "step_1_1", SourceSegment: 1, Title: "Old generated title"},
+	}
+	sections := []Segment{
+		{Index: 0, Guide: guide.Guide{Steps: []guide.Step{{ID: "step_0_1", SourceSegment: 0, Title: "Original model title"}}}},
+		{Index: 1, Guide: guide.Guide{Steps: []guide.Step{{ID: "step_1_1", SourceSegment: 1, Title: "New generated title"}}}},
+	}
+	got := sectionSafeSteps(saved, sections, 1)
+	if got[0].Title != "Manual title" || !got[0].UserEdited {
+		t.Fatalf("manual edit was lost: %#v", got)
+	}
+	if got[1].Title != "New generated title" || got[1].Number != 2 {
+		t.Fatalf("regenerated section was not replaced: %#v", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/alessio/tutorio/internal/guide"
@@ -224,6 +225,7 @@ func (p *Pipeline) SaveGuide(ctx context.Context, value guide.Guide) (guide.Guid
 	value.SourceID = stored.SourceID
 	value.CreatedAt = stored.CreatedAt
 	value.Generation = stored.Generation
+	markEditedSteps(stored.Steps, value.Steps)
 	if err = p.verifier.Verify(ctx, value); err != nil {
 		return guide.Guide{}, err
 	}
@@ -276,6 +278,7 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 		metadata.DurationMilliseconds += section.DurationMilliseconds
 	}
 	rebuilt := guide.Merge(stored.Title, partials)
+	rebuilt.Steps = sectionSafeSteps(stored.Steps, sections, sectionIndex)
 	rebuilt.ID = stored.ID
 	rebuilt.SourceType = stored.SourceType
 	rebuilt.SourceURI = stored.SourceURI
@@ -290,4 +293,49 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 		p.report(ctx, "complete", "Section regenerated and guide updated.", 1, 1)
 	}
 	return rebuilt, err
+}
+
+func markEditedSteps(previous, updated []guide.Step) {
+	byID := make(map[string]guide.Step, len(previous))
+	for _, step := range previous {
+		if step.ID != "" {
+			byID[step.ID] = step
+		}
+	}
+	for index := range updated {
+		before, ok := byID[updated[index].ID]
+		if !ok && index < len(previous) {
+			before, ok = previous[index], true
+		}
+		if ok && editableStepChanged(before, updated[index]) {
+			updated[index].UserEdited = true
+		}
+	}
+}
+
+func editableStepChanged(before, after guide.Step) bool {
+	return before.Title != after.Title || before.Explanation != after.Explanation ||
+		!slices.Equal(before.Actions, after.Actions) || !slices.Equal(before.Commands, after.Commands) ||
+		!slices.Equal(before.Warnings, after.Warnings)
+}
+
+// sectionSafeSteps rebuilds steps in source order while retaining the saved copy
+// of every section that was not explicitly regenerated.
+func sectionSafeSteps(saved []guide.Step, sections []Segment, regenerated int) []guide.Step {
+	bySection := make(map[int][]guide.Step, len(sections))
+	for _, step := range saved {
+		bySection[step.SourceSegment] = append(bySection[step.SourceSegment], step)
+	}
+	result := make([]guide.Step, 0, len(saved))
+	for _, section := range sections {
+		steps := bySection[section.Index]
+		if section.Index == regenerated || len(steps) == 0 {
+			steps = section.Guide.Steps
+		}
+		for _, step := range steps {
+			step.Number = len(result) + 1
+			result = append(result, step)
+		}
+	}
+	return result
 }
