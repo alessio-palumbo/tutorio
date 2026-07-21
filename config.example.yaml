@@ -1,0 +1,11 @@
+database:
+  path: ./data/tutorio.db
+ollama:
+  base_url: http://127.0.0.1:11434
+  model: qwen3:8b
+  max_output_tokens: 8192
+  context_window: 32768
+tools:
+  yt_dlp_path: yt-dlp
+processing:
+  segment_characters: 12000
