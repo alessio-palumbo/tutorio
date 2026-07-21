@@ -48,6 +48,15 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 }
 func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
 func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }
+func (a *App) SaveGuide(value guide.Guide) (guide.Guide, error) {
+	return a.pipeline.SaveGuide(a.context(), value)
+}
+func (a *App) ListGuideSections(id string) ([]jobs.Segment, error) {
+	return a.pipeline.Sections(a.context(), id)
+}
+func (a *App) RegenerateSection(id string, index int) (guide.Guide, error) {
+	return a.pipeline.RegenerateSection(a.context(), id, index)
+}
 func (a *App) context() context.Context {
 	if a.ctx == nil {
 		return context.Background()

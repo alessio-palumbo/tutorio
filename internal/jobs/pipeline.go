@@ -129,3 +129,92 @@ func (p *Pipeline) fail(ctx context.Context, job *Job, err error) error {
 func (p *Pipeline) report(ctx context.Context, stage, message string, current, total int) {
 	p.progress.Report(ctx, Progress{Stage: stage, Message: message, Current: current, Total: total})
 }
+
+func (p *Pipeline) Sections(ctx context.Context, guideID string) ([]Segment, error) {
+	stored, err := p.repository.Get(ctx, guideID)
+	if err != nil {
+		return nil, err
+	}
+	if stored.Generation.JobID == "" {
+		return []Segment{}, nil
+	}
+	return p.store.Segments(ctx, stored.Generation.JobID)
+}
+
+func (p *Pipeline) SaveGuide(ctx context.Context, value guide.Guide) (guide.Guide, error) {
+	stored, err := p.repository.Get(ctx, value.ID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	value.SourceType = stored.SourceType
+	value.SourceURI = stored.SourceURI
+	value.SourceID = stored.SourceID
+	value.CreatedAt = stored.CreatedAt
+	value.Generation = stored.Generation
+	if err = p.verifier.Verify(ctx, value); err != nil {
+		return guide.Guide{}, err
+	}
+	return p.repository.Save(ctx, value)
+}
+
+func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectionIndex int) (guide.Guide, error) {
+	stored, err := p.repository.Get(ctx, guideID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	if stored.Generation.JobID == "" {
+		return guide.Guide{}, fmt.Errorf("this guide predates persisted sections and cannot regenerate one section")
+	}
+	sections, err := p.store.Segments(ctx, stored.Generation.JobID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	position := -1
+	for index, item := range sections {
+		if item.Index == sectionIndex {
+			position = index
+			break
+		}
+	}
+	if position < 0 {
+		return guide.Guide{}, fmt.Errorf("section %d not found", sectionIndex+1)
+	}
+	p.report(ctx, "generating", fmt.Sprintf("Regenerating section %d…", sectionIndex+1), 0, 1)
+	replacement, err := p.generator.Generate(ctx, guide.GenerateRequest{Title: stored.Title, SourceType: stored.SourceType, SourceURI: stored.SourceURI, SourceID: stored.SourceID, Segments: []transcript.Segment{sections[position].Transcript}})
+	if err != nil {
+		return guide.Guide{}, fmt.Errorf("regenerate section %d: %w", sectionIndex+1, err)
+	}
+	sections[position].Guide = replacement
+	sections[position].Status = StatusCompleted
+	sections[position].Model = replacement.Generation.Model
+	sections[position].PromptTokens = replacement.Generation.PromptTokens
+	sections[position].OutputTokens = replacement.Generation.OutputTokens
+	sections[position].DurationMilliseconds = replacement.Generation.DurationMilliseconds
+	if err = p.store.CompleteSegment(ctx, sections[position]); err != nil {
+		return guide.Guide{}, err
+	}
+	partials := make([]guide.Guide, 0, len(sections))
+	metadata := guide.Generation{JobID: stored.Generation.JobID, SegmentCount: len(sections), ContextWindow: stored.Generation.ContextWindow, MaxOutputTokens: stored.Generation.MaxOutputTokens}
+	for _, section := range sections {
+		partials = append(partials, section.Guide)
+		metadata.Model = section.Model
+		metadata.PromptTokens += section.PromptTokens
+		metadata.OutputTokens += section.OutputTokens
+		metadata.DurationMilliseconds += section.DurationMilliseconds
+	}
+	rebuilt := guide.Merge(stored.Title, partials)
+	rebuilt.ID = stored.ID
+	rebuilt.SourceType = stored.SourceType
+	rebuilt.SourceURI = stored.SourceURI
+	rebuilt.SourceID = stored.SourceID
+	rebuilt.CreatedAt = stored.CreatedAt
+	rebuilt.Generation = metadata
+	if err = p.verifier.Verify(ctx, rebuilt); err != nil {
+		return guide.Guide{}, err
+	}
+	rebuilt, err = p.repository.Save(ctx, rebuilt)
+	if err == nil {
+		p.report(ctx, "complete", "Section regenerated and guide updated.", 1, 1)
+	}
+	return rebuilt, err
+}

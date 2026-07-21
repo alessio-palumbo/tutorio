@@ -347,6 +347,9 @@ func mergeGuides(title string, guides []Guide) Guide {
 	return result
 }
 
+// Merge combines independently generated source sections into one guide.
+func Merge(title string, sections []Guide) Guide { return mergeGuides(title, sections) }
+
 func anchorGuideTimestamps(value *Guide, segment transcript.Segment) {
 	start, end := segment.Start.Seconds(), segment.End.Seconds()
 	for index := range value.Steps {

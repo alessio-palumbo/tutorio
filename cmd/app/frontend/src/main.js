@@ -14,7 +14,7 @@ app.innerHTML = `
       <div id="message" role="status"></div><div id="progress" class="progress" hidden><div></div></div>
     </section>
     <section id="library"><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
-    <section id="reader" hidden><button class="quiet back" id="back">← Library</button><div id="guide-content"></div></section>
+    <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="edit-guide">Edit guide</button></div><div id="guide-content"></div></section>
   </main>`
 
 const message = document.querySelector('#message')
@@ -23,6 +23,8 @@ const guides = document.querySelector('#guides')
 const library = document.querySelector('#library')
 const reader = document.querySelector('#reader')
 const guideContent = document.querySelector('#guide-content')
+let currentGuide = null
+let currentSections = []
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
 
 async function loadGuides() {
@@ -44,12 +46,24 @@ function renderGuide(guide) {
   const steps = (guide.steps || []).map(step => `<article class="step"><div class="step-number">${step.number}</div><div><h3>${escapeHTML(step.title)}</h3><p>${escapeHTML(step.explanation)}</p>${renderTimestamps(step.timestamps, guide.source_uri)}${step.source_excerpt ? `<blockquote><span>Supporting transcript</span>${escapeHTML(step.source_excerpt)}</blockquote>` : ''}${renderList('Actions', step.actions)}${step.commands?.length ? `<h4>Commands</h4>${step.commands.map(command => `<pre><code>${escapeHTML(command)}</code></pre>`).join('')}` : ''}${renderList('Warnings', step.warnings)}</div></article>`).join('')
   const commands = guide.commands?.length ? `<section><h2>Commands</h2>${guide.commands.map(command => `<div class="command"><pre><code>${escapeHTML(command.value)}</code></pre><p>${escapeHTML(command.description)}</p></div>`).join('')}</section>` : ''
   const shortcuts = guide.keyboard_shortcuts?.length ? `<section><h2>Keyboard shortcuts</h2><div class="shortcut-grid">${guide.keyboard_shortcuts.map(item => `<div><kbd>${escapeHTML(item.keys)}</kbd><span>${escapeHTML(item.action)}${item.context ? ` · ${escapeHTML(item.context)}` : ''}</span></div>`).join('')}</div></section>` : ''
-  const generation = guide.generation?.model ? `<section class="generation"><h2>Generation details</h2><dl><div><dt>Model</dt><dd>${escapeHTML(guide.generation.model)}</dd></div><div><dt>Sections</dt><dd>${guide.generation.segment_count}</dd></div><div><dt>Duration</dt><dd>${Math.round(guide.generation.duration_milliseconds / 1000)}s</dd></div><div><dt>Tokens</dt><dd>${guide.generation.prompt_tokens} in · ${guide.generation.output_tokens} out</dd></div></dl></section>` : ''
+  const sectionActions = currentSections.length ? `<div class="section-actions">${currentSections.map(section => `<button class="quiet" data-regenerate-section="${section.index}">Regenerate section ${section.index + 1}</button>`).join('')}</div>` : ''
+  const generation = guide.generation?.model ? `<section class="generation"><h2>Generation details</h2><dl><div><dt>Model</dt><dd>${escapeHTML(guide.generation.model)}</dd></div><div><dt>Sections</dt><dd>${guide.generation.segment_count}</dd></div><div><dt>Duration</dt><dd>${Math.round(guide.generation.duration_milliseconds / 1000)}s</dd></div><div><dt>Tokens</dt><dd>${guide.generation.prompt_tokens} in · ${guide.generation.output_tokens} out</dd></div></dl>${sectionActions}</section>` : ''
   guideContent.innerHTML = `<article class="guide"><span class="eyebrow">${escapeHTML(guide.source_type)} GUIDE</span><h1>${escapeHTML(guide.title)}</h1><p class="lead">${escapeHTML(guide.overview)}</p>${generation}<section class="outcome"><h2>Final outcome</h2><p>${escapeHTML(guide.final_outcome)}</p></section>${renderList('Prerequisites', guide.prerequisites)}<section><h2>Step-by-step guide</h2><div class="steps">${steps}</div></section>${renderList('Important concepts', guide.important_concepts)}${commands}${shortcuts}${renderList('Warnings', guide.warnings)}${renderList('Common mistakes', guide.common_mistakes)}${renderList('Cheat sheet', cheatSheet)}${renderList('Appendix', guide.appendix)}<section><h2>Source timestamps</h2>${renderTimestamps(guide.source_timestamps, guide.source_uri)}</section></article>`
 }
 
+function renderEditor(guide) {
+  const steps=(guide.steps||[]).map((step,index)=>`<fieldset data-edit-step="${index}"><legend>Step ${index+1}</legend><label>Title<input name="title" value="${escapeHTML(step.title)}"></label><label>Explanation<textarea name="explanation">${escapeHTML(step.explanation)}</textarea></label><label>Actions, one per line<textarea name="actions">${escapeHTML((step.actions||[]).join('\n'))}</textarea></label><label>Commands, one per line<textarea name="commands">${escapeHTML((step.commands||[]).join('\n'))}</textarea></label><label>Warnings, one per line<textarea name="warnings">${escapeHTML((step.warnings||[]).join('\n'))}</textarea></label></fieldset>`).join('')
+  guideContent.innerHTML=`<form id="guide-editor" class="guide editor"><h1>Edit guide</h1><label>Title<input name="guide_title" value="${escapeHTML(guide.title)}"></label><label>Overview<textarea name="overview">${escapeHTML(guide.overview)}</textarea></label><label>Final outcome<textarea name="final_outcome">${escapeHTML(guide.final_outcome)}</textarea></label>${steps}<div class="editor-actions"><button type="submit">Save changes</button><button type="button" class="quiet" id="cancel-edit">Cancel</button></div></form>`
+  document.querySelector('#cancel-edit').addEventListener('click',()=>renderGuide(currentGuide))
+  document.querySelector('#guide-editor').addEventListener('submit',saveEditor)
+}
+
+async function saveEditor(event) {
+  event.preventDefault();const form=event.currentTarget;const updated=structuredClone(currentGuide);updated.title=form.elements.guide_title.value.trim();updated.overview=form.elements.overview.value.trim();updated.final_outcome=form.elements.final_outcome.value.trim();form.querySelectorAll('[data-edit-step]').forEach(fieldset=>{const step=updated.steps[Number(fieldset.dataset.editStep)];step.title=fieldset.elements.title.value.trim();step.explanation=fieldset.elements.explanation.value.trim();for(const field of ['actions','commands','warnings'])step[field]=fieldset.elements[field].value.split('\n').map(value=>value.trim()).filter(Boolean)});try{currentGuide=await backend().SaveGuide(updated);renderGuide(currentGuide);message.textContent='Guide changes saved.'}catch(err){message.textContent=String(err)}
+}
+
 async function openGuide(id) {
-  try { const guide = await backend().GetGuide(id); renderGuide(guide); library.hidden = true; reader.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); library.hidden = true; reader.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }) }
   catch (err) { message.textContent = String(err) }
 }
 
@@ -62,7 +76,9 @@ document.querySelector('#compile-form').addEventListener('submit', async event =
 document.querySelector('#refresh').addEventListener('click', loadGuides)
 guides.addEventListener('click', event => { const card = event.target.closest('[data-guide-id]'); if (card) openGuide(card.dataset.guideId) })
 document.querySelector('#back').addEventListener('click', () => { reader.hidden = true; library.hidden = false })
+document.querySelector('#edit-guide').addEventListener('click',()=>{if(currentGuide)renderEditor(currentGuide)})
 guideContent.addEventListener('click', event => { const link = event.target.closest('[data-source-url]'); if (link) window.runtime?.BrowserOpenURL?.(link.dataset.sourceUrl) })
+guideContent.addEventListener('click',async event=>{const button=event.target.closest('[data-regenerate-section]');if(!button)return;const index=Number(button.dataset.regenerateSection);if(!window.confirm(`Regenerate section ${index+1}? This will call Ollama and replace that section's generated content.`))return;button.disabled=true;try{currentGuide=await backend().RegenerateSection(currentGuide.id,index);currentSections=await backend().ListGuideSections(currentGuide.id);renderGuide(currentGuide);message.textContent=`Section ${index+1} regenerated.`}catch(err){message.textContent=String(err);button.disabled=false}})
 window.runtime?.EventsOn?.('pipeline:progress', update => {
   message.textContent = update.message
   const percent = update.total > 0 ? Math.max(4, Math.round(update.current / update.total * 100)) : 12

@@ -1,6 +1,16 @@
 #reader .back {
   margin-top: 42px;
 }
+.reader-actions { display: flex; justify-content: space-between; align-items: center; }
+.section-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.section-actions button { padding: 8px 10px; }
+.editor label { display: grid; gap: 7px; margin: 18px 0; font-weight: 700; }
+.editor input,.editor textarea { width: 100%; border: 1px solid #bdb8ac; border-radius: 7px; padding: 11px; font: inherit; font-weight: 400; }
+.editor textarea { min-height: 110px; resize: vertical; }
+.editor fieldset { margin: 26px 0; padding: 20px; border: 1px solid #d8d4c8; border-radius: 10px; }
+.editor legend { padding: 0 8px; font-weight: 700; }
+.editor-actions { display: flex; gap: 10px; }
+.editor-actions button { padding: 12px 18px; }
 
 .step blockquote { margin: 18px 0 0; padding: 12px 15px; border-left: 3px solid #78907b; background: #f4f6f2; color: #4d514c; font-size: 14px; }
 .step blockquote span { display: block; margin-bottom: 5px; color: #657965; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
