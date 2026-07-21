@@ -109,9 +109,23 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 		return Guide{}, SectionResult{}, fmt.Errorf("decode generated guide: %w", err)
 	}
 	anchorGuideTimestamps(&result, segment)
+	validateSourceExcerpts(&result, segment.Text)
 	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond)}
 	return result, metrics, nil
 }
+
+func validateSourceExcerpts(value *Guide, transcriptText string) {
+	haystack := strings.ToLower(compactWhitespace(transcriptText))
+	for index := range value.Steps {
+		excerpt := compactWhitespace(value.Steps[index].SourceExcerpt)
+		if excerpt == "" || !strings.Contains(haystack, strings.ToLower(excerpt)) {
+			value.Steps[index].SourceExcerpt = ""
+		} else {
+			value.Steps[index].SourceExcerpt = excerpt
+		}
+	}
+}
+func compactWhitespace(value string) string { return strings.Join(strings.Fields(value), " ") }
 
 var guideArrayFields = []string{"prerequisites", "steps", "important_concepts", "commands", "keyboard_shortcuts", "warnings", "common_mistakes", "cheat_sheet", "appendix", "source_timestamps"}
 var stepArrayFields = []string{"actions", "commands", "warnings", "timestamps"}
@@ -145,11 +159,29 @@ func normalizeGuideJSON(content string) ([]byte, error) {
 				for _, field := range stepStringArrayFields {
 					normalizeStringArray(step, field)
 				}
+				normalizeTextField(step, "source_excerpt")
 				normalizeTimestampArray(step, "timestamps")
 			}
 		}
 	}
 	return json.Marshal(value)
+}
+
+func normalizeTextField(value map[string]any, field string) {
+	raw, ok := value[field]
+	if !ok || raw == nil {
+		value[field] = ""
+		return
+	}
+	if _, ok := raw.(string); ok {
+		return
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil || !meaningfulText(string(encoded)) {
+		value[field] = ""
+		return
+	}
+	value[field] = string(encoded)
 }
 
 func normalizeTimestampArray(value map[string]any, field string) {

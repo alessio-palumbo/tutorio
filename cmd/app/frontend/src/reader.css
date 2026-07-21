@@ -1,3 +1,11 @@
 #reader .back {
   margin-top: 42px;
 }
+
+.step blockquote { margin: 18px 0 0; padding: 12px 15px; border-left: 3px solid #78907b; background: #f4f6f2; color: #4d514c; font-size: 14px; }
+.step blockquote span { display: block; margin-bottom: 5px; color: #657965; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.timestamps button { padding: 5px 9px; background: #e9eee8; color: #405941; font-size: 12px; font-weight: 500; }
+.generation dl { display: flex; flex-wrap: wrap; gap: 10px; }
+.generation dl div { min-width: 130px; padding: 12px; background: #fff; border: 1px solid #dedbd2; border-radius: 8px; }
+.generation dt { color: #657965; font-size: 11px; text-transform: uppercase; }
+.generation dd { margin: 4px 0 0; font-weight: 700; }

@@ -74,3 +74,14 @@ func TestAnchorTimestampsAndPopulateCheatSheet(t *testing.T) {
 		t.Fatalf("unexpected cheat sheet: %#v", merged.CheatSheet)
 	}
 }
+
+func TestValidateSourceExcerptsRejectsUnsupportedText(t *testing.T) {
+	value := Guide{Steps: []Step{{SourceExcerpt: "exact transcript words"}, {SourceExcerpt: "invented claim"}}}
+	validateSourceExcerpts(&value, "These are exact   transcript words from the source.")
+	if value.Steps[0].SourceExcerpt != "exact transcript words" {
+		t.Fatalf("lost valid excerpt: %#v", value.Steps)
+	}
+	if value.Steps[1].SourceExcerpt != "" {
+		t.Fatalf("kept unsupported excerpt: %#v", value.Steps)
+	}
+}
