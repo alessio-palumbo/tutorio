@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/alessio/tutorio/internal/config"
+	"github.com/alessio/tutorio/internal/exporter/markdown"
 	"github.com/alessio/tutorio/internal/guide"
 	"github.com/alessio/tutorio/internal/jobs"
 	"github.com/alessio/tutorio/internal/llm"
@@ -57,7 +58,7 @@ func main() {
 	)
 	progress := appui.NewEventReporter()
 	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow), guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore)
-	app := appui.NewApp(pipeline, repository, logger, progress)
+	app := appui.NewApp(pipeline, repository, logger, progress).WithExporter(markdown.New())
 
 	err = wails.Run(&options.App{
 		Title: "tutorio", Width: 1200, Height: 800,

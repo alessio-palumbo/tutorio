@@ -11,6 +11,12 @@
 .editor legend { padding: 0 8px; font-weight: 700; }
 .editor-actions { display: flex; gap: 10px; }
 .editor-actions button { padding: 12px 18px; }
+.jobs { display: grid; gap: 10px; }
+.job { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 14px; background: #fff4e4; border: 1px solid #e0bd83; border-radius: 8px; }
+.job div { display: grid; gap: 4px; min-width: 0; }
+.job strong,.job small { overflow: hidden; text-overflow: ellipsis; }
+.job span { color: #7b5b2d; font-size: 12px; text-transform: uppercase; }
+.job button { flex: none; padding: 9px 11px; }
 
 .step blockquote { margin: 18px 0 0; padding: 12px 15px; border-left: 3px solid #78907b; background: #f4f6f2; color: #4d514c; font-size: 14px; }
 .step blockquote span { display: block; margin-bottom: 5px; color: #657965; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }

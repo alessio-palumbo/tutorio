@@ -16,12 +16,12 @@ Exit criterion: all packages and a production Wails bundle build locally.
 ## Phase 1 — usable MVP
 
 - Add native file selection and full guide reader/editor screens.
-- Introduce persisted jobs with progress events, cancellation, retry, and recovery after restart.
+- Move persisted jobs and section retry into a true background queue with explicit cancellation and automatic restart recovery.
 - Evaluate an optional bounded synthesis pass to improve cohesion across the existing per-segment generation and deterministic merge flow.
-- Add semantic verification against transcript evidence, JSON repair, and user-visible quality diagnostics.
+- Expand verbatim transcript evidence into semantic verification and user-visible quality diagnostics.
 - Add editable prompt profiles and model discovery/health checks.
 - Detect yt-dlp/Ollama prerequisites and provide actionable setup errors.
-- Expand the opt-in real-pipeline integration test with deterministic adapter fixtures for CI.
+- Expand repository, exporter, and real-pipeline tests with deterministic adapter fixtures for CI.
 
 Exit criterion: a user can reliably compile, inspect, edit, and revisit a long tutorial without using a terminal.
 

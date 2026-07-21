@@ -13,8 +13,8 @@ app.innerHTML = `
       <form id="compile-form"><label for="url">YouTube URL</label><div class="row"><input id="url" type="url" placeholder="https://youtube.com/watch?v=…" required><button>Compile guide</button></div></form>
       <div id="message" role="status"></div><div id="progress" class="progress" hidden><div></div></div>
     </section>
-    <section id="library"><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
-    <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="edit-guide">Edit guide</button></div><div id="guide-content"></div></section>
+    <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Interrupted or failed jobs</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
+    <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><div><button class="quiet back" id="export-guide">Export Markdown</button><button class="quiet back" id="edit-guide">Edit guide</button></div></div><div id="guide-content"></div></section>
   </main>`
 
 const message = document.querySelector('#message')
@@ -23,6 +23,8 @@ const guides = document.querySelector('#guides')
 const library = document.querySelector('#library')
 const reader = document.querySelector('#reader')
 const guideContent = document.querySelector('#guide-content')
+const jobs = document.querySelector('#jobs')
+const jobArea = document.querySelector('#job-area')
 let currentGuide = null
 let currentSections = []
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
@@ -32,8 +34,11 @@ async function loadGuides() {
   try {
     const items = await backend().ListGuides()
     guides.innerHTML = items.length ? items.map(g => `<button class="guide-card" data-guide-id="${escapeHTML(g.id)}"><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><strong>Open guide →</strong></button>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
+    await loadJobs()
   } catch (err) { guides.innerHTML = `<p class="error">${escapeHTML(err)}</p>` }
 }
+
+async function loadJobs(){const items=(await backend().ListJobs()).filter(job=>job.status!=='completed'&&job.status!=='cancelled');jobArea.hidden=items.length===0;jobs.innerHTML=items.map(job=>`<div class="job"><div><strong>${escapeHTML(job.source_uri)}</strong><span>${escapeHTML(job.status)} · ${escapeHTML(job.stage)}${job.total?` · ${job.current}/${job.total}`:''}</span>${job.error?`<small>${escapeHTML(job.error)}</small>`:''}</div><button class="quiet" data-retry-job="${escapeHTML(job.id)}">Retry saved sections</button></div>`).join('')}
 
 const meaningfulValues = (values = []) => values.filter(value => value != null && !['', '{}', '[]', 'null'].includes(String(value).trim()))
 const renderList = (title, values = []) => { const filtered = meaningfulValues(values); return filtered.length ? `<section><h2>${title}</h2><ul>${filtered.map(value => `<li>${escapeHTML(value)}</li>`).join('')}</ul></section>` : '' }
@@ -75,8 +80,10 @@ document.querySelector('#compile-form').addEventListener('submit', async event =
 })
 document.querySelector('#refresh').addEventListener('click', loadGuides)
 guides.addEventListener('click', event => { const card = event.target.closest('[data-guide-id]'); if (card) openGuide(card.dataset.guideId) })
+jobs.addEventListener('click',async event=>{const button=event.target.closest('[data-retry-job]');if(!button)return;button.disabled=true;try{await backend().RetryJob(button.dataset.retryJob);message.textContent='Recovered guide saved.';await loadGuides()}catch(err){message.textContent=String(err);button.disabled=false}})
 document.querySelector('#back').addEventListener('click', () => { reader.hidden = true; library.hidden = false })
 document.querySelector('#edit-guide').addEventListener('click',()=>{if(currentGuide)renderEditor(currentGuide)})
+document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
 guideContent.addEventListener('click', event => { const link = event.target.closest('[data-source-url]'); if (link) window.runtime?.BrowserOpenURL?.(link.dataset.sourceUrl) })
 guideContent.addEventListener('click',async event=>{const button=event.target.closest('[data-regenerate-section]');if(!button)return;const index=Number(button.dataset.regenerateSection);if(!window.confirm(`Regenerate section ${index+1}? This will call Ollama and replace that section's generated content.`))return;button.disabled=true;try{currentGuide=await backend().RegenerateSection(currentGuide.id,index);currentSections=await backend().ListGuideSections(currentGuide.id);renderGuide(currentGuide);message.textContent=`Section ${index+1} regenerated.`}catch(err){message.textContent=String(err);button.disabled=false}})
 window.runtime?.EventsOn?.('pipeline:progress', update => {

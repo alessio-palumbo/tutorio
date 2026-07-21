@@ -13,7 +13,10 @@ This repository provides a buildable Wails application and the architectural spi
 - transcript cleaning and cue-aware segmentation.
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
-- SQLite storage and a minimal Wails library interface.
+- persistent jobs and per-section results with targeted retry after interruption.
+- verified transcript excerpts and clickable source timestamps.
+- guide editing, single-section regeneration, and Markdown export.
+- SQLite storage and a Wails guide library/reader.
 
 The UI is deliberately small. Cancellation, guide editing, model setup, and native file selection belong to the usable-MVP phase described in [the roadmap](docs/ROADMAP.md).
 
@@ -50,7 +53,8 @@ flowchart TD
 4. Oversized transcripts and cues are divided into model-sized segments.
 5. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
 6. Model variations are normalized, timestamps are anchored to the original timeline, and segment guides are merged.
-7. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
+7. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
+8. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
 
 Package responsibilities:
 
@@ -68,6 +72,7 @@ Package responsibilities:
 | `internal/storage/sqlite` | SQLite connection, schema, guide repository |
 | `internal/config` | YAML configuration and local defaults |
 | `internal/ui` | Thin Wails-facing application API |
+| `internal/exporter` | Output contract and Markdown implementation |
 
 Interfaces are owned near the code that consumes their behavior and kept small. `context.Context` crosses every operation that can block. Dependencies are assembled only in the root `main.go`; no package-level mutable state is used. Wails v2's binding generator requires its Go entrypoint at the project root, so this is the one intentional variation from the usual `cmd/app/main.go` layout.
 
@@ -79,7 +84,7 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 ## Guide model
 
-The stored guide includes overview, prerequisites, final outcome, ordered steps, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, and source timestamps. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. The initial schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql).
+The stored guide includes overview, prerequisites, final outcome, ordered steps, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Jobs and individual transcript/model sections are persisted separately for recovery and targeted regeneration. The schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql).
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
@@ -178,7 +183,7 @@ The test uses a temporary SQLite database and does not add its output to the des
 
 - Long transcripts are generated section-by-section and merged deterministically. A later synthesis pass may improve cross-section narrative cohesion without sacrificing provenance.
 - Verification checks structure, not yet factual grounding against transcript evidence.
-- Pipeline execution is synchronous and jobs are not persisted yet, although live stage and per-section progress is emitted to the UI.
+- Pipeline execution remains synchronous, although jobs and completed sections are persisted for restart recovery and live stage progress is emitted to the UI.
 - The backend supports transcript-file import, while native file selection and its frontend control are Phase 1 UI work.
 - Audio transcription, screenshots, vision, playlists, exports, flashcards, quizzes, and progressive learning are architecture extension points only.
 

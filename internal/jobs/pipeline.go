@@ -130,6 +130,79 @@ func (p *Pipeline) report(ctx context.Context, stage, message string, current, t
 	p.progress.Report(ctx, Progress{Stage: stage, Message: message, Current: current, Total: total})
 }
 
+func (p *Pipeline) Jobs(ctx context.Context) ([]Job, error) { return p.store.List(ctx, 100) }
+
+func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, error) {
+	job, err := p.store.Get(ctx, jobID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	sections, err := p.store.Segments(ctx, jobID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	if len(sections) == 0 {
+		return guide.Guide{}, fmt.Errorf("job has no persisted transcript sections")
+	}
+	job.Status = StatusRunning
+	job.Stage = "generating"
+	job.Error = ""
+	job.UpdatedAt = time.Now().UTC()
+	_ = p.store.Update(ctx, job)
+	partials := make([]guide.Guide, 0, len(sections))
+	metadata := guide.Generation{JobID: job.ID, SegmentCount: len(sections)}
+	title := "Recovered tutorial"
+	for index := range sections {
+		section := &sections[index]
+		if section.Status != StatusCompleted || len(section.Guide.Steps) == 0 {
+			p.report(ctx, "generating", fmt.Sprintf("Retrying section %d of %d…", index+1, len(sections)), index, len(sections))
+			generated, generationErr := p.generator.Generate(ctx, guide.GenerateRequest{Title: title, SourceType: job.SourceType, SourceURI: job.SourceURI, Segments: []transcript.Segment{section.Transcript}})
+			if generationErr != nil {
+				return guide.Guide{}, p.fail(ctx, &job, generationErr)
+			}
+			section.Guide = generated
+			section.Status = StatusCompleted
+			section.Model = generated.Generation.Model
+			section.PromptTokens = generated.Generation.PromptTokens
+			section.OutputTokens = generated.Generation.OutputTokens
+			section.DurationMilliseconds = generated.Generation.DurationMilliseconds
+			if err = p.store.CompleteSegment(ctx, *section); err != nil {
+				return guide.Guide{}, p.fail(ctx, &job, err)
+			}
+		}
+		if section.Guide.Title != "" {
+			title = section.Guide.Title
+		}
+		partials = append(partials, section.Guide)
+		metadata.Model = section.Model
+		metadata.PromptTokens += section.PromptTokens
+		metadata.OutputTokens += section.OutputTokens
+		metadata.DurationMilliseconds += section.DurationMilliseconds
+	}
+	result := guide.Merge(title, partials)
+	result.SourceType = job.SourceType
+	result.SourceURI = job.SourceURI
+	result.Generation = metadata
+	if err = p.verifier.Verify(ctx, result); err != nil {
+		return guide.Guide{}, p.fail(ctx, &job, err)
+	}
+	result, err = p.repository.Save(ctx, result)
+	if err != nil {
+		return guide.Guide{}, p.fail(ctx, &job, err)
+	}
+	completed := time.Now().UTC()
+	job.Status = StatusCompleted
+	job.Stage = "complete"
+	job.GuideID = result.ID
+	job.Current = len(sections)
+	job.Total = len(sections)
+	job.CompletedAt = &completed
+	job.UpdatedAt = completed
+	_ = p.store.Update(ctx, job)
+	p.report(ctx, "complete", "Recovered job completed and saved.", 1, 1)
+	return result, nil
+}
+
 func (p *Pipeline) Sections(ctx context.Context, guideID string) ([]Segment, error) {
 	stored, err := p.repository.Get(ctx, guideID)
 	if err != nil {
