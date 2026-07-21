@@ -71,7 +71,24 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 }
 func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
 func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }
-func (a *App) DeleteGuide(id string) error             { return a.guides.Delete(a.context(), id) }
+func (a *App) DeleteGuide(id string) (bool, error) {
+	value, err := a.guides.Get(a.context(), id)
+	if err != nil {
+		return false, err
+	}
+	choice, err := runtime.MessageDialog(a.context(), runtime.MessageDialogOptions{
+		Type:          runtime.WarningDialog,
+		Title:         "Delete guide?",
+		Message:       fmt.Sprintf("Delete “%s”?\n\nThis permanently removes the guide and its saved compilation data.", value.Title),
+		Buttons:       []string{"Delete", "Cancel"},
+		DefaultButton: "Cancel",
+		CancelButton:  "Cancel",
+	})
+	if err != nil || choice != "Delete" {
+		return false, err
+	}
+	return true, a.guides.Delete(a.context(), id)
+}
 func (a *App) SaveGuide(value guide.Guide) (guide.Guide, error) {
 	return a.pipeline.SaveGuide(a.context(), value)
 }
