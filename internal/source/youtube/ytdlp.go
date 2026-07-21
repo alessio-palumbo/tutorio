@@ -83,7 +83,10 @@ func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Docum
 		return transcript.Document{}, err
 	}
 	defer f.Close()
-	doc, err := y.parser.Parse(ctx, meta.ID, f)
+	// Preserve the downloaded extension so the parser recognises WebVTT rather
+	// than treating the entire subtitle file as untimed plain text.
+	doc, err := y.parser.Parse(ctx, files[0], f)
+	doc.SourceID = meta.ID
 	doc.Title = meta.Title
 	return doc, err
 }

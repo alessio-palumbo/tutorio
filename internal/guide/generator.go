@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -95,7 +96,7 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
-	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use start_seconds, end_seconds, label. Unknown arrays must be empty.`
+	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not tutorial steps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use numeric start_seconds and end_seconds measured from the start of the complete video, plus label. Unknown arrays must be empty.`
 	response, err := g.provider.Complete(ctx, llm.Request{Format: "json", Temperature: 0, MaxTokens: g.maxTokens, ContextSize: g.contextSize, Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: fmt.Sprintf("Tutorial title: %s\nSection %d of %d:\n%s", title, current, total, data)}}})
 	if err != nil {
 		return Guide{}, SectionResult{}, err
@@ -301,18 +302,88 @@ func normalizeStringArray(value map[string]any, field string) {
 	}
 	result := make([]any, 0, len(raw))
 	for _, item := range raw {
-		if text, ok := item.(string); ok {
+		for _, text := range humanReadableValues(field, item) {
 			if meaningfulText(text) {
 				result = append(result, text)
 			}
-			continue
-		}
-		encoded, err := json.Marshal(item)
-		if err == nil && meaningfulText(string(encoded)) {
-			result = append(result, string(encoded))
 		}
 	}
 	value[field] = result
+}
+
+func humanReadableValues(field string, raw any) []string {
+	switch typed := raw.(type) {
+	case string:
+		return []string{strings.TrimSpace(typed)}
+	case []any:
+		var result []string
+		for _, item := range typed {
+			result = append(result, humanReadableValues(field, item)...)
+		}
+		return result
+	case map[string]any:
+		if text := describedObject(field, typed); text != "" {
+			return []string{text}
+		}
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		result := make([]string, 0, len(keys))
+		for _, key := range keys {
+			for _, text := range humanReadableValues(field, typed[key]) {
+				if meaningfulText(text) {
+					result = append(result, humanizeKey(key)+": "+text)
+				}
+			}
+		}
+		return result
+	case float64, bool:
+		return []string{fmt.Sprint(typed)}
+	default:
+		return nil
+	}
+}
+
+func describedObject(field string, value map[string]any) string {
+	var primaryKeys, detailKeys []string
+	switch field {
+	case "warnings":
+		primaryKeys, detailKeys = []string{"warning"}, []string{"details", "context"}
+	case "common_mistakes":
+		primaryKeys, detailKeys = []string{"mistake"}, []string{"correction", "consequence", "description"}
+	case "prerequisites":
+		primaryKeys, detailKeys = []string{"prerequisite", "requirement", "title"}, []string{"explanation", "description"}
+	case "appendix":
+		primaryKeys, detailKeys = []string{"title", "note"}, []string{"content", "description", "details"}
+	}
+	primary := firstScalar(value, primaryKeys...)
+	if primary == "" {
+		return ""
+	}
+	detail := firstScalar(value, detailKeys...)
+	if detail != "" && detail != primary {
+		return primary + " — " + detail
+	}
+	return primary
+}
+
+func firstScalar(value map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if text, ok := value[key].(string); ok && strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
+}
+
+func humanizeKey(value string) string {
+	value = strings.ReplaceAll(value, "_", " ")
+	if value == "" {
+		return value
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func normalizeArray(value map[string]any, field string) {
