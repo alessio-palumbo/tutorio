@@ -1,0 +1,33 @@
+# Local configuration and application data
+/config.yaml
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Wails build output
+/build/bin/
+/cmd/app/frontend/dist/
+/cmd/app/frontend/wailsjs/
+/cmd/app/frontend/package.json.md5
+
+# Frontend dependencies and tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Go test/build artifacts
+*.test
+*.out
+coverage.*
+cpu.prof
+mem.prof
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
