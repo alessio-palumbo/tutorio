@@ -13,20 +13,20 @@ This repository provides a buildable Wails application and the architectural spi
 - transcript cleaning and cue-aware segmentation.
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
-- persistent jobs and per-section results with targeted retry after interruption.
+- a single-worker background compilation queue with cancellation and automatic restart recovery.
+- persistent per-section results with targeted retry after interruption.
 - verified transcript excerpts and clickable source timestamps.
 - guide editing, single-section regeneration, and Markdown export.
 - SQLite storage and a Wails guide library/reader.
 
-The UI is deliberately small. Cancellation, guide editing, model setup, and native file selection belong to the usable-MVP phase described in [the roadmap](docs/ROADMAP.md).
+The UI is deliberately small. Model setup and native transcript-file selection remain in the usable-MVP phase described in [the roadmap](docs/ROADMAP.md).
 
 ## Architecture
 
 Dependency direction points inward. Domain and orchestration packages do not import Wails, SQLite, Ollama, or process-execution details.
 
 ```text
-Wails UI ─┐
-          ├─> jobs.Pipeline ─> source / transcript / guide interfaces
+Wails UI ─> jobs.Manager ─> jobs.Pipeline ─> source / transcript / guide interfaces
 yt-dlp ───┤                         ▲            ▲
 Ollama ───┤                         │            │
 SQLite ───┘                    domain models  use-case rules
@@ -47,14 +47,15 @@ flowchart TD
     I --> J[Display in library and guide reader]
 ```
 
-1. The source registry selects the YouTube or local-file adapter.
-2. `yt-dlp` retrieves YouTube subtitles; TXT, SRT, and VTT files are parsed directly.
-3. Transcript text is cleaned while source timestamps are preserved.
-4. Oversized transcripts and cues are divided into model-sized segments.
-5. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
-6. Model variations are normalized, timestamps are anchored to the original timeline, and segment guides are merged.
-7. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
-8. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
+1. The UI persists a pending job and returns immediately; a single background worker runs queued jobs without competing Ollama requests.
+2. The source registry selects the YouTube or local-file adapter.
+3. `yt-dlp` retrieves YouTube subtitles; TXT, SRT, and VTT files are parsed directly.
+4. Transcript text is cleaned while source timestamps are preserved.
+5. Oversized transcripts and cues are divided into model-sized segments.
+6. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
+7. Model variations are normalized, timestamps are anchored to the original timeline, and segment guides are merged.
+8. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
+9. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
 
 Package responsibilities:
 
@@ -68,7 +69,7 @@ Package responsibilities:
 | `internal/transcript` | Source-neutral parsing, cleaning, segmentation |
 | `internal/llm` | Model-provider contract and Ollama HTTP adapter |
 | `internal/guide` | Guide domain, generation and verification contracts |
-| `internal/jobs` | Pipeline use case and stage orchestration |
+| `internal/jobs` | Background queue, pipeline use case, recovery, and stage orchestration |
 | `internal/storage/sqlite` | SQLite connection, schema, guide repository |
 | `internal/config` | YAML configuration and local defaults |
 | `internal/ui` | Thin Wails-facing application API |
@@ -183,8 +184,8 @@ The test uses a temporary SQLite database and does not add its output to the des
 
 - Long transcripts are generated section-by-section and merged deterministically. A later synthesis pass may improve cross-section narrative cohesion without sacrificing provenance.
 - Verification checks structure, not yet factual grounding against transcript evidence.
-- Pipeline execution remains synchronous, although jobs and completed sections are persisted for restart recovery and live stage progress is emitted to the UI.
+- The queue deliberately runs one compilation at a time to avoid concurrent local-model memory pressure.
 - The backend supports transcript-file import, while native file selection and its frontend control are Phase 1 UI work.
-- Audio transcription, screenshots, vision, playlists, exports, flashcards, quizzes, and progressive learning are architecture extension points only.
+- Audio transcription, screenshots, vision, playlists, PDF export, flashcards, quizzes, and progressive learning are architecture extension points only.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for phased delivery criteria.

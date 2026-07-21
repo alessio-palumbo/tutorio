@@ -39,10 +39,31 @@ func (p *Pipeline) WithStore(store Store) *Pipeline {
 	return p
 }
 func (p *Pipeline) Run(ctx context.Context, request source.Request) (guide.Guide, error) {
+	job, err := p.CreateJob(ctx, request)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	return p.RunJob(ctx, job, request)
+}
+
+// CreateJob persists a queued unit of work before expensive processing begins.
+func (p *Pipeline) CreateJob(ctx context.Context, request source.Request) (Job, error) {
 	now := time.Now().UTC()
-	job := Job{ID: fmt.Sprintf("job_%d", now.UnixNano()), SourceType: request.Type, SourceURI: request.URI, Status: StatusRunning, Stage: "source", CreatedAt: now, UpdatedAt: now}
+	job := Job{ID: fmt.Sprintf("job_%d", now.UnixNano()), SourceType: request.Type, SourceURI: request.URI, Status: StatusPending, Stage: "queued", CreatedAt: now, UpdatedAt: now}
 	if err := p.store.Create(ctx, job); err != nil {
-		return guide.Guide{}, fmt.Errorf("create job: %w", err)
+		return Job{}, fmt.Errorf("create job: %w", err)
+	}
+	return job, nil
+}
+
+// RunJob executes a previously persisted job.
+func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) (guide.Guide, error) {
+	job.Status = StatusRunning
+	job.Stage = "source"
+	job.Error = ""
+	job.UpdatedAt = time.Now().UTC()
+	if err := p.store.Update(ctx, job); err != nil {
+		return guide.Guide{}, fmt.Errorf("start job: %w", err)
 	}
 	logger := p.logger.With("source_type", request.Type, "source_uri", request.URI)
 	p.report(ctx, "source", "Retrieving transcript…", 0, 0)

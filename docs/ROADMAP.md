@@ -7,16 +7,16 @@ The roadmap deliberately grows capabilities by adding adapters and use cases aro
 - Clean package boundaries, dependency injection, structured logging, cancellation-aware interfaces.
 - YouTube and transcript-file source adapters.
 - TXT, SRT, and VTT parsing; cleaning; bounded segmentation.
-- Ollama chat adapter and structured guide schema.
+- Ollama generate adapter and structured guide schema.
 - Structural verification and SQLite persistence.
-- Minimal Wails compile/library shell.
+- Wails compile/library/reader shell with inline step editing and Markdown export.
+- Background queue with cancellation, persisted sections, targeted retry, and automatic restart recovery.
 
 Exit criterion: all packages and a production Wails bundle build locally.
 
 ## Phase 1 — usable MVP
 
-- Add native file selection and full guide reader/editor screens.
-- Move persisted jobs and section retry into a true background queue with explicit cancellation and automatic restart recovery.
+- Add native transcript-file selection and expand guide editing beyond individual steps where useful.
 - Evaluate an optional bounded synthesis pass to improve cohesion across the existing per-segment generation and deterministic merge flow.
 - Expand verbatim transcript evidence into semantic verification and user-visible quality diagnostics.
 - Add editable prompt profiles and model discovery/health checks.

@@ -13,7 +13,7 @@ app.innerHTML = `
       <form id="compile-form"><label for="url">YouTube URL</label><div class="row"><input id="url" type="url" placeholder="https://youtube.com/watch?v=…" required><button>Compile guide</button></div></form>
       <div id="message" role="status"></div><div id="progress" class="progress" hidden><div></div></div>
     </section>
-    <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Interrupted or failed jobs</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
+    <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Compilation queue</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
     <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="export-guide">Export Markdown</button></div><div id="guide-content"></div></section>
   </main>`
 
@@ -38,7 +38,7 @@ async function loadGuides() {
   } catch (err) { guides.innerHTML = `<p class="error">${escapeHTML(err)}</p>` }
 }
 
-async function loadJobs(){const items=(await backend().ListJobs()).filter(job=>job.status!=='completed'&&job.status!=='cancelled');jobArea.hidden=items.length===0;jobs.innerHTML=items.map(job=>`<div class="job"><div><strong>${escapeHTML(job.source_uri)}</strong><span>${escapeHTML(job.status)} · ${escapeHTML(job.stage)}${job.total?` · ${job.current}/${job.total}`:''}</span>${job.error?`<small>${escapeHTML(job.error)}</small>`:''}</div><button class="quiet" data-retry-job="${escapeHTML(job.id)}">Retry saved sections</button></div>`).join('')}
+async function loadJobs(){const items=(await backend().ListJobs()).filter(job=>job.status!=='completed'&&job.status!=='cancelled');jobArea.hidden=items.length===0;jobs.innerHTML=items.map(job=>{const action=job.status==='failed'?`<button class="quiet" data-retry-job="${escapeHTML(job.id)}">Retry saved sections</button>`:`<button class="quiet" data-cancel-job="${escapeHTML(job.id)}">Cancel</button>`;return `<div class="job"><div><strong>${escapeHTML(job.source_uri)}</strong><span>${escapeHTML(job.status)} · ${escapeHTML(job.stage)}${job.total?` · ${job.current}/${job.total}`:''}</span>${job.error?`<small>${escapeHTML(job.error)}</small>`:''}</div>${action}</div>`}).join('')}
 
 const meaningfulValues = (values = []) => values.filter(value => value != null && !['', '{}', '[]', 'null'].includes(String(value).trim()))
 const renderList = (title, values = []) => { const filtered = meaningfulValues(values); return filtered.length ? `<section><h2>${title}</h2><ul>${filtered.map(value => `<li>${escapeHTML(value)}</li>`).join('')}</ul></section>` : '' }
@@ -74,24 +74,26 @@ async function openGuide(id) {
 }
 
 document.querySelector('#compile-form').addEventListener('submit', async event => {
-  event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true; progress.hidden = false; progress.querySelector('div').style.width = '4%'; message.textContent = 'Starting local compilation…'
-  try { await backend().CompileYouTube(document.querySelector('#url').value); message.textContent = 'Guide saved.'; await loadGuides() }
-  catch (err) { message.textContent = String(err) }
-  finally { button.disabled = false; if (!message.textContent.includes('saved')) progress.hidden = true }
+  event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true; progress.hidden = false; progress.querySelector('div').style.width = '4%'; message.textContent = 'Adding compilation to the local queue…'
+  try { await backend().QueueYouTube(document.querySelector('#url').value); message.textContent = 'Compilation queued. You can keep using the library.'; await loadJobs() }
+	catch (err) { message.textContent = String(err) }
+	finally { button.disabled = false; if (!message.textContent.includes('queued')) progress.hidden = true }
 })
 document.querySelector('#refresh').addEventListener('click', loadGuides)
 guides.addEventListener('click', event => { const card = event.target.closest('[data-guide-id]'); if (card) openGuide(card.dataset.guideId) })
-jobs.addEventListener('click',async event=>{const button=event.target.closest('[data-retry-job]');if(!button)return;button.disabled=true;try{await backend().RetryJob(button.dataset.retryJob);message.textContent='Recovered guide saved.';await loadGuides()}catch(err){message.textContent=String(err);button.disabled=false}})
+jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const cancel=event.target.closest('[data-cancel-job]');const button=retry||cancel;if(!button)return;button.disabled=true;try{if(retry){await backend().RetryJob(retry.dataset.retryJob);message.textContent='Compilation requeued.'}else{await backend().CancelJob(cancel.dataset.cancelJob);message.textContent='Compilation cancelled.'}await loadJobs()}catch(err){message.textContent=String(err);button.disabled=false}})
 document.querySelector('#back').addEventListener('click', () => { reader.hidden = true; library.hidden = false })
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
 guideContent.addEventListener('click', event => { const link = event.target.closest('[data-source-url]'); if (link) window.runtime?.BrowserOpenURL?.(link.dataset.sourceUrl) })
 guideContent.addEventListener('click',event=>{const button=event.target.closest('[data-edit-step]');if(button)renderStepEditor(Number(button.dataset.editStep))})
 guideContent.addEventListener('click',async event=>{const button=event.target.closest('[data-regenerate-section]');if(!button)return;const index=Number(button.dataset.regenerateSection);const hasEdits=(currentGuide.steps||[]).some(step=>step.source_segment===index&&step.user_edited);const warning=hasEdits?' This section contains manual edits, which will be replaced. Edits in every other section will be preserved.':'';if(!window.confirm(`Regenerate section ${index+1}? This will call Ollama and replace that section's generated content.${warning}`))return;button.disabled=true;try{currentGuide=await backend().RegenerateSection(currentGuide.id,index);currentSections=await backend().ListGuideSections(currentGuide.id);renderGuide(currentGuide);message.textContent=`Section ${index+1} regenerated.`}catch(err){message.textContent=String(err);button.disabled=false}})
+let jobRefreshTimer
 window.runtime?.EventsOn?.('pipeline:progress', update => {
   message.textContent = update.message
   const percent = update.total > 0 ? Math.max(4, Math.round(update.current / update.total * 100)) : 12
   progress.hidden = false
   progress.querySelector('div').style.width = `${percent}%`
-  if (update.stage === 'complete') setTimeout(() => { progress.hidden = true }, 1200)
+	if (update.stage === 'complete') setTimeout(() => { progress.hidden = true }, 1200)
+	clearTimeout(jobRefreshTimer);jobRefreshTimer=setTimeout(()=>{loadJobs();if(update.stage==='complete')loadGuides()},250)
 })
 loadGuides()

@@ -23,12 +23,11 @@ type App struct {
 	logger   *slog.Logger
 	progress *EventReporter
 	exporter exporter.Exporter
+	manager  *jobs.Manager
 }
 
-func (a *App) WithExporter(value exporter.Exporter) *App { a.exporter = value; return a }
-
-func NewApp(pipeline *jobs.Pipeline, guides guide.Repository, logger *slog.Logger, progress ...*EventReporter) *App {
-	app := &App{pipeline: pipeline, guides: guides, logger: logger}
+func NewApp(pipeline *jobs.Pipeline, guides guide.Repository, logger *slog.Logger, output exporter.Exporter, manager *jobs.Manager, progress ...*EventReporter) *App {
+	app := &App{pipeline: pipeline, guides: guides, logger: logger, exporter: output, manager: manager}
 	if len(progress) > 0 {
 		app.progress = progress[0]
 	}
@@ -39,13 +38,30 @@ func (a *App) Startup(ctx context.Context) {
 	if a.progress != nil {
 		a.progress.Attach(ctx)
 	}
+	if a.manager != nil {
+		a.manager.Start(ctx)
+	}
 	a.logger.InfoContext(ctx, "tutorio started")
+}
+func (a *App) Shutdown(context.Context) {
+	if a.manager != nil {
+		a.manager.Stop()
+	}
 }
 func (a *App) CompileYouTube(uri string) (guide.Guide, error) {
 	if !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "http://") {
 		return guide.Guide{}, fmt.Errorf("enter a valid YouTube URL")
 	}
 	return a.pipeline.Run(a.context(), source.Request{Type: "youtube", URI: uri})
+}
+func (a *App) QueueYouTube(uri string) (jobs.Job, error) {
+	if !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "http://") {
+		return jobs.Job{}, fmt.Errorf("enter a valid YouTube URL")
+	}
+	if a.manager == nil {
+		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
+	}
+	return a.manager.Enqueue(a.context(), source.Request{Type: "youtube", URI: uri})
 }
 func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 	if strings.TrimSpace(path) == "" {
@@ -64,8 +80,19 @@ func (a *App) ListGuideSections(id string) ([]jobs.Segment, error) {
 func (a *App) RegenerateSection(id string, index int) (guide.Guide, error) {
 	return a.pipeline.RegenerateSection(a.context(), id, index)
 }
-func (a *App) ListJobs() ([]jobs.Job, error)           { return a.pipeline.Jobs(a.context()) }
-func (a *App) RetryJob(id string) (guide.Guide, error) { return a.pipeline.RetryJob(a.context(), id) }
+func (a *App) ListJobs() ([]jobs.Job, error) { return a.pipeline.Jobs(a.context()) }
+func (a *App) RetryJob(id string) (jobs.Job, error) {
+	if a.manager == nil {
+		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
+	}
+	return a.manager.Retry(a.context(), id)
+}
+func (a *App) CancelJob(id string) error {
+	if a.manager == nil {
+		return fmt.Errorf("background job manager is not configured")
+	}
+	return a.manager.Cancel(a.context(), id)
+}
 func (a *App) ExportMarkdown(id string) (string, error) {
 	if a.exporter == nil {
 		return "", fmt.Errorf("Markdown exporter is not configured")

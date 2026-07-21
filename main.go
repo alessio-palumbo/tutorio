@@ -58,13 +58,15 @@ func main() {
 	)
 	progress := appui.NewEventReporter()
 	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow), guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore)
-	app := appui.NewApp(pipeline, repository, logger, progress).WithExporter(markdown.New())
+	manager := jobs.NewManager(pipeline, jobStore, logger)
+	app := appui.NewApp(pipeline, repository, logger, markdown.New(), manager, progress)
 
 	err = wails.Run(&options.App{
 		Title: "tutorio", Width: 1200, Height: 800,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 246, G: 244, B: 238, A: 1},
 		OnStartup:        app.Startup,
+		OnShutdown:       app.Shutdown,
 		Bind:             []interface{}{app},
 	})
 	if err != nil {
