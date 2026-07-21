@@ -54,11 +54,13 @@ func (o *Ollama) Complete(ctx context.Context, request Request) (Response, error
 		return Response{}, fmt.Errorf("Ollama returned %s: %s", resp.Status, strings.TrimSpace(string(data)))
 	}
 	var result struct {
+		Model           string  `json:"model"`
 		Message         Message `json:"message"`
 		Done            bool    `json:"done"`
 		DoneReason      string  `json:"done_reason"`
 		EvalCount       int     `json:"eval_count"`
 		PromptEvalCount int     `json:"prompt_eval_count"`
+		TotalDuration   int64   `json:"total_duration"`
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return Response{}, fmt.Errorf("decode Ollama response: %w", err)
@@ -70,5 +72,5 @@ func (o *Ollama) Complete(ctx context.Context, request Request) (Response, error
 	if result.DoneReason == "length" {
 		return Response{}, fmt.Errorf("Ollama exhausted its context after %d prompt tokens and %d generated tokens; increase ollama.context_window or compile a shorter source", result.PromptEvalCount, result.EvalCount)
 	}
-	return Response{Content: content}, nil
+	return Response{Content: content, Model: result.Model, PromptTokens: result.PromptEvalCount, OutputTokens: result.EvalCount, DurationNanos: result.TotalDuration}, nil
 }

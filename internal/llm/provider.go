@@ -15,7 +15,11 @@ type Request struct {
 	ContextSize int       `json:"context_size,omitempty"`
 }
 type Response struct {
-	Content string `json:"content"`
+	Content       string `json:"content"`
+	Model         string `json:"model,omitempty"`
+	PromptTokens  int    `json:"prompt_tokens,omitempty"`
+	OutputTokens  int    `json:"output_tokens,omitempty"`
+	DurationNanos int64  `json:"duration_nanos,omitempty"`
 }
 type Provider interface {
 	Complete(ctx context.Context, request Request) (Response, error)

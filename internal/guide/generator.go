@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alessio/tutorio/internal/llm"
 	"github.com/alessio/tutorio/internal/transcript"
@@ -18,6 +19,16 @@ type GenerateRequest struct {
 	SourceID   string
 	Segments   []transcript.Segment
 	OnProgress func(current, total int)
+	OnSegment  func(result SectionResult)
+}
+type SectionResult struct {
+	Index                int
+	Segment              transcript.Segment
+	Guide                Guide
+	Model                string
+	PromptTokens         int
+	OutputTokens         int
+	DurationMilliseconds int64
 }
 type Generator interface {
 	Generate(ctx context.Context, request GenerateRequest) (Guide, error)
@@ -44,12 +55,23 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 		return Guide{}, fmt.Errorf("transcript contains no content to generate")
 	}
 	partials := make([]Guide, 0, len(req.Segments))
+	metadata := Generation{SegmentCount: len(req.Segments), ContextWindow: g.contextSize, MaxOutputTokens: g.maxTokens}
 	for index, segment := range req.Segments {
-		partial, err := g.generateSegment(ctx, req.Title, segment, index+1, len(req.Segments))
+		partial, metrics, err := g.generateSegment(ctx, req.Title, segment, index+1, len(req.Segments))
 		if err != nil {
 			return Guide{}, fmt.Errorf("generate section %d of %d: %w", index+1, len(req.Segments), err)
 		}
 		partials = append(partials, partial)
+		metadata.Model = metrics.Model
+		metadata.PromptTokens += metrics.PromptTokens
+		metadata.OutputTokens += metrics.OutputTokens
+		metadata.DurationMilliseconds += metrics.DurationMilliseconds
+		if req.OnSegment != nil {
+			metrics.Index = index
+			metrics.Segment = segment
+			metrics.Guide = partial
+			req.OnSegment(metrics)
+		}
 		if req.OnProgress != nil {
 			req.OnProgress(index+1, len(req.Segments))
 		}
@@ -58,10 +80,11 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 	result.SourceType = req.SourceType
 	result.SourceURI = req.SourceURI
 	result.SourceID = req.SourceID
+	result.Generation = metadata
 	return result, nil
 }
 
-func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segment transcript.Segment, current, total int) (Guide, error) {
+func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segment transcript.Segment, current, total int) (Guide, SectionResult, error) {
 	promptSegment := struct {
 		Index        int     `json:"index"`
 		StartSeconds float64 `json:"start_seconds"`
@@ -70,23 +93,24 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	}{Index: segment.Index, StartSeconds: segment.Start.Seconds(), EndSeconds: segment.End.Seconds(), Text: segment.Text}
 	data, err := json.Marshal(promptSegment)
 	if err != nil {
-		return Guide{}, err
+		return Guide{}, SectionResult{}, err
 	}
-	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. Every step must include number, title, explanation, actions, commands, warnings, timestamps. Timestamps use start_seconds, end_seconds, label. Unknown arrays must be empty.`
+	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use start_seconds, end_seconds, label. Unknown arrays must be empty.`
 	response, err := g.provider.Complete(ctx, llm.Request{Format: "json", Temperature: 0, MaxTokens: g.maxTokens, ContextSize: g.contextSize, Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: fmt.Sprintf("Tutorial title: %s\nSection %d of %d:\n%s", title, current, total, data)}}})
 	if err != nil {
-		return Guide{}, err
+		return Guide{}, SectionResult{}, err
 	}
 	var result Guide
 	normalized, err := normalizeGuideJSON(response.Content)
 	if err != nil {
-		return Guide{}, fmt.Errorf("normalize generated guide: %w", err)
+		return Guide{}, SectionResult{}, fmt.Errorf("normalize generated guide: %w", err)
 	}
 	if err := json.Unmarshal(normalized, &result); err != nil {
-		return Guide{}, fmt.Errorf("decode generated guide: %w", err)
+		return Guide{}, SectionResult{}, fmt.Errorf("decode generated guide: %w", err)
 	}
 	anchorGuideTimestamps(&result, segment)
-	return result, nil
+	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond)}
+	return result, metrics, nil
 }
 
 var guideArrayFields = []string{"prerequisites", "steps", "important_concepts", "commands", "keyboard_shortcuts", "warnings", "common_mistakes", "cheat_sheet", "appendix", "source_timestamps"}
