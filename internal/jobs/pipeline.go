@@ -19,6 +19,7 @@ type Pipeline struct {
 	cleaner    transcript.Cleaner
 	segmenter  transcript.Segmenter
 	generator  guide.Generator
+	expander   guide.Expander
 	verifier   guide.Verifier
 	repository guide.Repository
 	logger     *slog.Logger
@@ -31,7 +32,11 @@ func NewPipeline(s source.Resolver, c transcript.Cleaner, sg transcript.Segmente
 	if len(reporters) > 0 && reporters[0] != nil {
 		reporter = reporters[0]
 	}
-	return &Pipeline{s, c, sg, g, v, r, l, reporter, discardStore{}}
+	return &Pipeline{sources: s, cleaner: c, segmenter: sg, generator: g, verifier: v, repository: r, logger: l, progress: reporter, store: discardStore{}}
+}
+func (p *Pipeline) WithExpander(expander guide.Expander) *Pipeline {
+	p.expander = expander
+	return p
 }
 func (p *Pipeline) WithStore(store Store) *Pipeline {
 	if store != nil {
@@ -248,7 +253,12 @@ func (p *Pipeline) Sections(ctx context.Context, guideID string) ([]Segment, err
 	if stored.Generation.JobID == "" {
 		return []Segment{}, nil
 	}
-	return p.store.Segments(ctx, stored.Generation.JobID)
+	sections, err := p.store.Segments(ctx, stored.Generation.JobID)
+	for index := range sections {
+		sections[index].RawResponse = ""
+		sections[index].Error = ""
+	}
+	return sections, err
 }
 
 func (p *Pipeline) JobSections(ctx context.Context, jobID string) ([]Segment, error) {
@@ -325,6 +335,7 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	rebuilt.SourceID = stored.SourceID
 	rebuilt.CreatedAt = stored.CreatedAt
 	rebuilt.Generation = metadata
+	rebuilt.DeepDives = stored.DeepDives
 	if err = p.verifier.Verify(ctx, rebuilt); err != nil {
 		return guide.Guide{}, err
 	}
@@ -333,6 +344,60 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 		p.report(ctx, "complete", "Section regenerated and guide updated.", 1, 1)
 	}
 	return rebuilt, err
+}
+
+func (p *Pipeline) DelveSection(ctx context.Context, guideID string, sectionIndex int) (guide.Guide, error) {
+	if p.expander == nil {
+		return guide.Guide{}, fmt.Errorf("deep-dive generation is not configured")
+	}
+	stored, err := p.repository.Get(ctx, guideID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	sections, err := p.Sections(ctx, guideID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	var sourceSection *Segment
+	for index := range sections {
+		if sections[index].Index == sectionIndex {
+			sourceSection = &sections[index]
+			break
+		}
+	}
+	if sourceSection == nil {
+		return guide.Guide{}, fmt.Errorf("section %d not found", sectionIndex+1)
+	}
+	steps := make([]guide.Step, 0)
+	for _, step := range stored.Steps {
+		if step.SourceSegment == sectionIndex {
+			steps = append(steps, step)
+		}
+	}
+	p.report(ctx, "expanding", fmt.Sprintf("Delving deeper into section %d…", sectionIndex+1), 0, 1)
+	deepDive, err := p.expander.Expand(ctx, guide.ExpandRequest{GuideTitle: stored.Title, Section: sourceSection.Transcript, Steps: steps})
+	if err != nil {
+		return guide.Guide{}, fmt.Errorf("delve into section %d: %w", sectionIndex+1, err)
+	}
+	replaced := false
+	for index := range stored.DeepDives {
+		if stored.DeepDives[index].SourceSegment == sectionIndex {
+			stored.DeepDives[index] = deepDive
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		stored.DeepDives = append(stored.DeepDives, deepDive)
+	}
+	if err = p.verifier.Verify(ctx, stored); err != nil {
+		return guide.Guide{}, err
+	}
+	stored, err = p.repository.Save(ctx, stored)
+	if err == nil {
+		p.report(ctx, "complete", fmt.Sprintf("Section %d deep dive saved.", sectionIndex+1), 1, 1)
+	}
+	return stored, err
 }
 
 func markEditedSteps(previous, updated []guide.Step) {

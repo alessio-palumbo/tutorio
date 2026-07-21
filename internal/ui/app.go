@@ -98,6 +98,28 @@ func (a *App) ListGuideSections(id string) ([]jobs.Segment, error) {
 func (a *App) RegenerateSection(id string, index int) (guide.Guide, error) {
 	return a.pipeline.RegenerateSection(a.context(), id, index)
 }
+func (a *App) ConfirmRegenerateSection(id string, index int) (bool, error) {
+	value, err := a.guides.Get(a.context(), id)
+	if err != nil {
+		return false, err
+	}
+	hasEdits := false
+	for _, step := range value.Steps {
+		if step.SourceSegment == index && step.UserEdited {
+			hasEdits = true
+			break
+		}
+	}
+	message := fmt.Sprintf("Regenerate section %d with Ollama?", index+1)
+	if hasEdits {
+		message += "\n\nThis section contains manual edits, which will be replaced. Edits in other sections will be preserved."
+	}
+	choice, err := runtime.MessageDialog(a.context(), runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "Regenerate section?", Message: message, Buttons: []string{"Regenerate", "Cancel"}, DefaultButton: "Cancel", CancelButton: "Cancel"})
+	return choice == "Regenerate", err
+}
+func (a *App) DelveSection(id string, index int) (guide.Guide, error) {
+	return a.pipeline.DelveSection(a.context(), id, index)
+}
 func (a *App) ListJobs() ([]jobs.Job, error) { return a.pipeline.Jobs(a.context()) }
 func (a *App) GetJobSections(id string) ([]jobs.Segment, error) {
 	return a.pipeline.JobSections(a.context(), id)

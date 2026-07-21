@@ -39,6 +39,16 @@ func (Exporter) Render(ctx context.Context, g guide.Guide) ([]byte, error) {
 		}
 		section(&b, "Warnings", step.Warnings)
 	}
+	if len(g.DeepDives) > 0 {
+		write("## Deep dives\n\n")
+		for _, item := range g.DeepDives {
+			write("### %s\n\n%s\n\n", item.Title, item.Explanation)
+			bulletList(&b, "Key points", item.KeyPoints)
+			bulletList(&b, "Examples", item.Examples)
+			bulletList(&b, "Caveats", item.Caveats)
+			bulletList(&b, "Source evidence", item.Evidence)
+		}
+	}
 	section(&b, "Important concepts", g.ImportantConcepts)
 	if len(g.Commands) > 0 {
 		write("## Commands\n\n")
@@ -62,6 +72,18 @@ func (Exporter) Render(ctx context.Context, g guide.Guide) ([]byte, error) {
 		timestamps(&b, g.SourceURI, g.SourceTimestamps)
 	}
 	return b.Bytes(), nil
+}
+func bulletList(b *bytes.Buffer, title string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "**%s**\n\n", title)
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			fmt.Fprintf(b, "- %s\n", value)
+		}
+	}
+	b.WriteString("\n")
 }
 func section(b *bytes.Buffer, title string, values []string) {
 	if len(values) == 0 {

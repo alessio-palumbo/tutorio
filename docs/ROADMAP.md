@@ -11,6 +11,7 @@ The roadmap deliberately grows capabilities by adding adapters and use cases aro
 - Structural verification and SQLite persistence.
 - Wails compile/library/reader shell with inline step editing and Markdown export.
 - Background queue with cancellation, persisted sections, targeted retry, and automatic restart recovery.
+- Active-section diagnostics, visible source sections, and persisted source-grounded deep dives.
 
 Exit criterion: all packages and a production Wails bundle build locally.
 
@@ -19,6 +20,7 @@ Exit criterion: all packages and a production Wails bundle build locally.
 - Add native transcript-file selection and expand guide editing beyond individual steps where useful.
 - Evaluate an optional bounded synthesis pass to improve cohesion across the existing per-segment generation and deterministic merge flow.
 - Expand verbatim transcript evidence into semantic verification and user-visible quality diagnostics.
+- Generalise timestamp references into source-neutral references before adding page-based document sources.
 - Add editable prompt profiles and model discovery/health checks.
 - Detect yt-dlp/Ollama prerequisites and provide actionable setup errors.
 - Expand repository, exporter, and real-pipeline tests with deterministic adapter fixtures for CI.
@@ -28,6 +30,7 @@ Exit criterion: a user can reliably compile, inspect, edit, and revisit a long t
 ## Phase 2 — richer ingestion and output
 
 - Add local video ingestion and a Whisper transcription adapter.
+- Add PDF, Markdown, and HTML document adapters with page or heading citations.
 - Add screenshot extraction as a separate media-enrichment stage.
 - Add a vision-provider interface and Gemma-family implementation.
 - Add PDF export behind an exporter interface.

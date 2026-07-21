@@ -30,6 +30,18 @@ type Command struct {
 	Value       string `json:"value"`
 	Description string `json:"description"`
 }
+type DeepDive struct {
+	ID            string    `json:"id"`
+	SourceSegment int       `json:"source_segment"`
+	Title         string    `json:"title"`
+	Explanation   string    `json:"explanation"`
+	KeyPoints     []string  `json:"key_points"`
+	Examples      []string  `json:"examples"`
+	Caveats       []string  `json:"caveats"`
+	Evidence      []string  `json:"evidence"`
+	Model         string    `json:"model,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
 type Guide struct {
 	ID                string      `json:"id"`
 	SourceType        string      `json:"source_type"`
@@ -48,6 +60,7 @@ type Guide struct {
 	CheatSheet        []string    `json:"cheat_sheet"`
 	Appendix          []string    `json:"appendix"`
 	SourceTimestamps  []Timestamp `json:"source_timestamps"`
+	DeepDives         []DeepDive  `json:"deep_dives,omitempty"`
 	Generation        Generation  `json:"generation"`
 	CreatedAt         time.Time   `json:"created_at"`
 	UpdatedAt         time.Time   `json:"updated_at"`

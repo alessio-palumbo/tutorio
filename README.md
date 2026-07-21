@@ -15,8 +15,9 @@ This repository provides a buildable Wails application and the architectural spi
 - structural verification before persistence.
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
 - persistent per-section results with targeted retry after interruption.
+- active-section timing, slow-call indicators, and inspectable local model diagnostics.
 - verified transcript excerpts and clickable source timestamps.
-- guide editing, single-section regeneration, and Markdown export.
+- visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
 - SQLite storage and a Wails guide library/reader.
 
 The UI is deliberately small. Model setup and native transcript-file selection remain in the usable-MVP phase described in [the roadmap](docs/ROADMAP.md).
@@ -85,7 +86,7 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 ## Guide model
 
-The stored guide includes overview, prerequisites, final outcome, ordered steps, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Jobs and individual transcript/model sections are persisted separately for recovery and targeted regeneration. The schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql).
+The stored guide includes overview, prerequisites, final outcome, ordered steps, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, timing, and local diagnostics. The schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql).
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
@@ -183,6 +184,7 @@ The test uses a temporary SQLite database and does not add its output to the des
 ## Deliberate limitations
 
 - Long transcripts are generated section-by-section and merged deterministically. A later synthesis pass may improve cross-section narrative cohesion without sacrificing provenance.
+- Deep dives deliberately use only the saved source transcript and current section steps; optional cited web research is not implemented.
 - Verification checks structure, not yet factual grounding against transcript evidence.
 - The queue deliberately runs one compilation at a time to avoid concurrent local-model memory pressure.
 - The backend supports transcript-file import, while native file selection and its frontend control are Phase 1 UI work.
