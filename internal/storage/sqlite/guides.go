@@ -70,3 +70,32 @@ func (r *GuideRepository) List(ctx context.Context, limit int) ([]guide.Summary,
 	}
 	return result, rows.Err()
 }
+
+// Delete removes a guide and the persisted compilation job that produced it.
+// job_segments are removed by their ON DELETE CASCADE constraint.
+func (r *GuideRepository) Delete(ctx context.Context, id string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, `SELECT content_json FROM guides WHERE id=?`, id).Scan(&raw); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("guide %q not found", id)
+	} else if err != nil {
+		return err
+	}
+	var value guide.Guide
+	if err = json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value.Generation.JobID != "" {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM jobs WHERE id=?`, value.Generation.JobID); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM guides WHERE id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

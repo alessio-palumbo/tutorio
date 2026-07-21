@@ -71,6 +71,7 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 }
 func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
 func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }
+func (a *App) DeleteGuide(id string) error             { return a.guides.Delete(a.context(), id) }
 func (a *App) SaveGuide(value guide.Guide) (guide.Guide, error) {
 	return a.pipeline.SaveGuide(a.context(), value)
 }

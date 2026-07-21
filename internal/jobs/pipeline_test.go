@@ -32,6 +32,7 @@ func (m *memoryRepository) Save(_ context.Context, g guide.Guide) (guide.Guide, 
 }
 func (*memoryRepository) Get(context.Context, string) (guide.Guide, error)   { return guide.Guide{}, nil }
 func (*memoryRepository) List(context.Context, int) ([]guide.Summary, error) { return nil, nil }
+func (*memoryRepository) Delete(context.Context, string) error               { return nil }
 func TestPipelineRunsStages(t *testing.T) {
 	repo := &memoryRepository{}
 	pipeline := NewPipeline(source.NewRegistry(fakeSource{}), transcript.NewCleaner(), transcript.NewSegmenter(100), fakeGenerator{}, guide.NewStructuralVerifier(), repo, slog.New(slog.NewTextHandler(io.Discard, nil)))

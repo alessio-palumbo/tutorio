@@ -1,5 +1,6 @@
 import './style.css'
 import './reader.css'
+import './library.css'
 
 const backend = () => window.go?.ui?.App
 const app = document.querySelector('#app')
@@ -33,7 +34,7 @@ async function loadGuides() {
   if (!backend()) { guides.innerHTML = '<p class="muted">Run with <code>wails dev</code> to connect the library.</p>'; return }
   try {
     const items = await backend().ListGuides()
-    guides.innerHTML = items.length ? items.map(g => `<button class="guide-card" data-guide-id="${escapeHTML(g.id)}"><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><strong>Open guide →</strong></button>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
+    guides.innerHTML = items.length ? items.map(g => `<article class="guide-card"><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><div class="card-actions"><button data-guide-id="${escapeHTML(g.id)}">Open guide →</button><button class="quiet danger" data-delete-guide="${escapeHTML(g.id)}" data-guide-title="${escapeHTML(g.title)}">Delete</button></div></article>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
     await loadJobs()
   } catch (err) { guides.innerHTML = `<p class="error">${escapeHTML(err)}</p>` }
 }
@@ -80,7 +81,7 @@ document.querySelector('#compile-form').addEventListener('submit', async event =
 	finally { button.disabled = false; if (!message.textContent.includes('queued')) progress.hidden = true }
 })
 document.querySelector('#refresh').addEventListener('click', loadGuides)
-guides.addEventListener('click', event => { const card = event.target.closest('[data-guide-id]'); if (card) openGuide(card.dataset.guideId) })
+guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){if(!window.confirm(`Delete “${remove.dataset.guideTitle}”? This permanently removes the guide and its saved compilation data.`))return;remove.disabled=true;try{await backend().DeleteGuide(remove.dataset.deleteGuide);message.textContent='Guide deleted.';await loadGuides()}catch(err){message.textContent=String(err);remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
 jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const cancel=event.target.closest('[data-cancel-job]');const button=retry||cancel;if(!button)return;button.disabled=true;try{if(retry){await backend().RetryJob(retry.dataset.retryJob);message.textContent='Compilation requeued.'}else{await backend().CancelJob(cancel.dataset.cancelJob);message.textContent='Compilation cancelled.'}await loadJobs()}catch(err){message.textContent=String(err);button.disabled=false}})
 document.querySelector('#back').addEventListener('click', () => { reader.hidden = true; library.hidden = false })
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})

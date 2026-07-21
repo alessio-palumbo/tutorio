@@ -1,0 +1,14 @@
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card-actions button {
+  padding: 9px 12px;
+}
+
+.danger {
+  color: #8b2f2f;
+  border-color: #d4aaaa;
+}
