@@ -94,16 +94,20 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 
 func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segment transcript.Segment, current, total int) (Guide, SectionResult, error) {
 	promptSegment := struct {
-		Index        int     `json:"index"`
-		StartSeconds float64 `json:"start_seconds"`
-		EndSeconds   float64 `json:"end_seconds"`
-		Text         string  `json:"text"`
-	}{Index: segment.Index, StartSeconds: segment.Start.Seconds(), EndSeconds: segment.End.Seconds(), Text: segment.Text}
+		Index        int                  `json:"index"`
+		StartSeconds float64              `json:"start_seconds"`
+		EndSeconds   float64              `json:"end_seconds"`
+		Reference    transcript.Reference `json:"reference,omitempty"`
+		Text         string               `json:"text"`
+	}{Index: segment.Index, StartSeconds: segment.Start.Seconds(), EndSeconds: segment.End.Seconds(), Reference: segment.Reference, Text: segment.Text}
 	data, err := json.Marshal(promptSegment)
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
 	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not tutorial steps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use numeric start_seconds and end_seconds measured from the start of the complete video, plus label. Unknown arrays must be empty.`
+	if segment.Reference.Kind == "page" {
+		prompt = `Reconstruct this section of a document as part of a practical learning manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and terminology. Extract useful shortcuts and concise references in the cheat_sheet. Do not invent information from pages you have not seen. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not procedural steps. Every step must include number, title, explanation, actions, commands, warnings, an empty timestamps array, and source_excerpt containing a short verbatim supporting excerpt from this document section. Unknown arrays must be empty. Page references are assigned deterministically from the supplied page range after generation.`
+	}
 	response, err := g.provider.Complete(ctx, llm.Request{Format: "json", Temperature: 0, MaxTokens: g.maxTokens, ContextSize: g.contextSize, Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: fmt.Sprintf("Tutorial title: %s\nSection %d of %d:\n%s", title, current, total, data)}}})
 	if err != nil {
 		return Guide{}, SectionResult{}, err
@@ -121,7 +125,7 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 		result.Steps[index].ID = fmt.Sprintf("step_%d_%d", segment.Index, index+1)
 		result.Steps[index].SourceSegment = segment.Index
 	}
-	anchorGuideTimestamps(&result, segment)
+	anchorGuideSource(&result, segment)
 	validateSourceExcerpts(&result, segment.Text)
 	return result, metrics, nil
 }
@@ -438,6 +442,7 @@ func mergeGuides(title string, guides []Guide) Guide {
 		result.CheatSheet = appendUnique(result.CheatSheet, item.CheatSheet...)
 		result.Appendix = appendUnique(result.Appendix, item.Appendix...)
 		result.SourceTimestamps = append(result.SourceTimestamps, item.SourceTimestamps...)
+		result.SourceReferences = appendUniqueReferences(result.SourceReferences, item.SourceReferences...)
 	}
 	populateCheatSheet(&result)
 	return result
@@ -467,6 +472,56 @@ func anchorGuideTimestamps(value *Guide, segment transcript.Segment) {
 	if len(value.SourceTimestamps) == 0 {
 		value.SourceTimestamps = []Timestamp{{StartSeconds: start, EndSeconds: end, Label: fmt.Sprintf("Source section %d", segment.Index+1)}}
 	}
+}
+
+func anchorGuideSource(value *Guide, segment transcript.Segment) {
+	if segment.Reference.Kind == "page" {
+		pageStart, pageEnd := segment.Reference.PageStart, segment.Reference.PageEnd
+		if pageEnd < pageStart {
+			pageEnd = pageStart
+		}
+		span := pageEnd - pageStart + 1
+		for index := range value.Steps {
+			page := pageStart
+			if len(value.Steps) > 0 && span > 1 {
+				page += index * span / len(value.Steps)
+			}
+			value.Steps[index].Timestamps = nil
+			value.Steps[index].References = []SourceReference{{Kind: "page", PageStart: page, PageEnd: page, Label: value.Steps[index].Title}}
+		}
+		value.SourceTimestamps = nil
+		value.SourceReferences = []SourceReference{{Kind: "page", PageStart: pageStart, PageEnd: pageEnd, Label: segment.Reference.Label}}
+		return
+	}
+	anchorGuideTimestamps(value, segment)
+	for index := range value.Steps {
+		value.Steps[index].References = referencesFromTimestamps(value.Steps[index].Timestamps)
+	}
+	value.SourceReferences = referencesFromTimestamps(value.SourceTimestamps)
+}
+
+func referencesFromTimestamps(values []Timestamp) []SourceReference {
+	result := make([]SourceReference, 0, len(values))
+	for _, value := range values {
+		result = append(result, SourceReference{Kind: "time", StartSeconds: value.StartSeconds, EndSeconds: value.EndSeconds, Label: value.Label})
+	}
+	return result
+}
+
+func appendUniqueReferences(values []SourceReference, additions ...SourceReference) []SourceReference {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		seen[fmt.Sprintf("%s:%g:%g:%d:%d:%s", value.Kind, value.StartSeconds, value.EndSeconds, value.PageStart, value.PageEnd, value.Label)] = struct{}{}
+	}
+	for _, value := range additions {
+		key := fmt.Sprintf("%s:%g:%g:%d:%d:%s", value.Kind, value.StartSeconds, value.EndSeconds, value.PageStart, value.PageEnd, value.Label)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		values = append(values, value)
+	}
+	return values
 }
 
 func anchorTimestamp(value *Timestamp, start, end float64) {

@@ -8,18 +8,27 @@ type Timestamp struct {
 	EndSeconds   float64 `json:"end_seconds"`
 	Label        string  `json:"label"`
 }
+type SourceReference struct {
+	Kind         string  `json:"kind"`
+	StartSeconds float64 `json:"start_seconds,omitempty"`
+	EndSeconds   float64 `json:"end_seconds,omitempty"`
+	PageStart    int     `json:"page_start,omitempty"`
+	PageEnd      int     `json:"page_end,omitempty"`
+	Label        string  `json:"label,omitempty"`
+}
 type Step struct {
-	ID            string      `json:"id,omitempty"`
-	Number        int         `json:"number"`
-	SourceSegment int         `json:"source_segment"`
-	UserEdited    bool        `json:"user_edited,omitempty"`
-	Title         string      `json:"title"`
-	Explanation   string      `json:"explanation"`
-	Actions       []string    `json:"actions"`
-	Commands      []string    `json:"commands,omitempty"`
-	Warnings      []string    `json:"warnings,omitempty"`
-	Timestamps    []Timestamp `json:"timestamps,omitempty"`
-	SourceExcerpt string      `json:"source_excerpt,omitempty"`
+	ID            string            `json:"id,omitempty"`
+	Number        int               `json:"number"`
+	SourceSegment int               `json:"source_segment"`
+	UserEdited    bool              `json:"user_edited,omitempty"`
+	Title         string            `json:"title"`
+	Explanation   string            `json:"explanation"`
+	Actions       []string          `json:"actions"`
+	Commands      []string          `json:"commands,omitempty"`
+	Warnings      []string          `json:"warnings,omitempty"`
+	Timestamps    []Timestamp       `json:"timestamps,omitempty"`
+	References    []SourceReference `json:"references,omitempty"`
+	SourceExcerpt string            `json:"source_excerpt,omitempty"`
 }
 type Shortcut struct {
 	Keys    string `json:"keys"`
@@ -43,27 +52,28 @@ type DeepDive struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 type Guide struct {
-	ID                string      `json:"id"`
-	SourceType        string      `json:"source_type"`
-	SourceURI         string      `json:"source_uri"`
-	SourceID          string      `json:"source_id"`
-	Title             string      `json:"title"`
-	Overview          string      `json:"overview"`
-	Prerequisites     []string    `json:"prerequisites"`
-	FinalOutcome      string      `json:"final_outcome"`
-	Steps             []Step      `json:"steps"`
-	ImportantConcepts []string    `json:"important_concepts"`
-	Commands          []Command   `json:"commands"`
-	KeyboardShortcuts []Shortcut  `json:"keyboard_shortcuts"`
-	Warnings          []string    `json:"warnings"`
-	CommonMistakes    []string    `json:"common_mistakes"`
-	CheatSheet        []string    `json:"cheat_sheet"`
-	Appendix          []string    `json:"appendix"`
-	SourceTimestamps  []Timestamp `json:"source_timestamps"`
-	DeepDives         []DeepDive  `json:"deep_dives,omitempty"`
-	Generation        Generation  `json:"generation"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
+	ID                string            `json:"id"`
+	SourceType        string            `json:"source_type"`
+	SourceURI         string            `json:"source_uri"`
+	SourceID          string            `json:"source_id"`
+	Title             string            `json:"title"`
+	Overview          string            `json:"overview"`
+	Prerequisites     []string          `json:"prerequisites"`
+	FinalOutcome      string            `json:"final_outcome"`
+	Steps             []Step            `json:"steps"`
+	ImportantConcepts []string          `json:"important_concepts"`
+	Commands          []Command         `json:"commands"`
+	KeyboardShortcuts []Shortcut        `json:"keyboard_shortcuts"`
+	Warnings          []string          `json:"warnings"`
+	CommonMistakes    []string          `json:"common_mistakes"`
+	CheatSheet        []string          `json:"cheat_sheet"`
+	Appendix          []string          `json:"appendix"`
+	SourceTimestamps  []Timestamp       `json:"source_timestamps"`
+	SourceReferences  []SourceReference `json:"source_references,omitempty"`
+	DeepDives         []DeepDive        `json:"deep_dives,omitempty"`
+	Generation        Generation        `json:"generation"`
+	CreatedAt         time.Time         `json:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at"`
 }
 type Generation struct {
 	JobID                string `json:"job_id,omitempty"`

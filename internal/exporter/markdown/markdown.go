@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/alessio/tutorio/internal/guide"
@@ -29,7 +30,7 @@ func (Exporter) Render(ctx context.Context, g guide.Guide) ([]byte, error) {
 		if step.SourceExcerpt != "" {
 			write("> Supporting transcript: %s\n\n", step.SourceExcerpt)
 		}
-		timestamps(&b, g.SourceURI, step.Timestamps)
+		references(&b, g.SourceURI, step.References, step.Timestamps)
 		section(&b, "Actions", step.Actions)
 		if len(step.Commands) > 0 {
 			write("**Commands**\n\n")
@@ -67,11 +68,41 @@ func (Exporter) Render(ctx context.Context, g guide.Guide) ([]byte, error) {
 	section(&b, "Common mistakes", g.CommonMistakes)
 	section(&b, "Cheat sheet", g.CheatSheet)
 	section(&b, "Appendix", g.Appendix)
-	if len(g.SourceTimestamps) > 0 {
-		write("## Source timestamps\n\n")
-		timestamps(&b, g.SourceURI, g.SourceTimestamps)
+	if len(g.SourceReferences) > 0 || len(g.SourceTimestamps) > 0 {
+		write("## Source references\n\n")
+		references(&b, g.SourceURI, g.SourceReferences, g.SourceTimestamps)
 	}
 	return b.Bytes(), nil
+}
+func references(b *bytes.Buffer, uri string, values []guide.SourceReference, fallback []guide.Timestamp) {
+	if len(values) == 0 {
+		timestamps(b, uri, fallback)
+		return
+	}
+	b.WriteString("**Source:** ")
+	for index, value := range values {
+		if index > 0 {
+			b.WriteString(" · ")
+		}
+		if value.Kind == "page" {
+			label := fmt.Sprintf("page %d", value.PageStart)
+			if value.PageEnd > value.PageStart {
+				label = fmt.Sprintf("pages %d-%d", value.PageStart, value.PageEnd)
+			}
+			if value.Label != "" {
+				label += " " + value.Label
+			}
+			fileURL := (&url.URL{Scheme: "file", Path: uri, Fragment: fmt.Sprintf("page=%d", value.PageStart)}).String()
+			fmt.Fprintf(b, "[%s](%s)", label, fileURL)
+			continue
+		}
+		label := formatTime(value.StartSeconds)
+		if value.Label != "" {
+			label += " " + value.Label
+		}
+		fmt.Fprintf(b, "[%s](%s)", label, timestampURL(uri, value.StartSeconds))
+	}
+	b.WriteString("\n\n")
 }
 func bulletList(b *bytes.Buffer, title string, values []string) {
 	if len(values) == 0 {

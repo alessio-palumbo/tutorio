@@ -81,6 +81,17 @@ func TestAnchorTimestampsAndPopulateCheatSheet(t *testing.T) {
 	}
 }
 
+func TestAnchorPageReferencesWithoutInventingTimestamps(t *testing.T) {
+	value := Guide{Steps: []Step{{Title: "One"}, {Title: "Two"}}}
+	anchorGuideSource(&value, transcript.Segment{Index: 1, Reference: transcript.Reference{Kind: "page", PageStart: 10, PageEnd: 12}})
+	if len(value.Steps[0].Timestamps) != 0 || value.Steps[0].References[0].PageStart != 10 || value.Steps[1].References[0].PageStart != 11 {
+		t.Fatalf("unexpected page references: %#v", value.Steps)
+	}
+	if len(value.SourceReferences) != 1 || value.SourceReferences[0].PageEnd != 12 {
+		t.Fatalf("unexpected source references: %#v", value.SourceReferences)
+	}
+}
+
 func TestValidateSourceExcerptsRejectsUnsupportedText(t *testing.T) {
 	value := Guide{Steps: []Step{{SourceExcerpt: "exact transcript words"}, {SourceExcerpt: "invented claim"}}}
 	validateSourceExcerpts(&value, "These are exact   transcript words from the source.")
