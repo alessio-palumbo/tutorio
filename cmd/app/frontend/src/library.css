@@ -12,3 +12,18 @@
   color: #8b2f2f;
   border-color: #d4aaaa;
 }
+
+.import-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  color: #ced6cf;
+  font-size: 13px;
+}
+
+.create .import-row button {
+  color: #faf8f2;
+  border-color: #718076;
+}

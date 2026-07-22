@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -68,6 +69,24 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 		return guide.Guide{}, fmt.Errorf("transcript path is required")
 	}
 	return a.pipeline.Run(a.context(), source.Request{Type: "transcript_file", URI: path})
+}
+func (a *App) SelectAndQueueTranscript() (jobs.Job, error) {
+	if a.manager == nil {
+		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
+	}
+	path, err := runtime.OpenFileDialog(a.context(), runtime.OpenDialogOptions{
+		Title:   "Import transcript",
+		Filters: []runtime.FileFilter{{DisplayName: "Transcript files", Pattern: "*.txt;*.srt;*.vtt"}},
+	})
+	if err != nil || path == "" {
+		return jobs.Job{}, err
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".txt", ".srt", ".vtt":
+	default:
+		return jobs.Job{}, fmt.Errorf("unsupported transcript file %q", filepath.Ext(path))
+	}
+	return a.manager.Enqueue(a.context(), source.Request{Type: "transcript_file", URI: path})
 }
 func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
 func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }
