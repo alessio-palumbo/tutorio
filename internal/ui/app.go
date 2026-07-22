@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 
 	"github.com/alessio/tutorio/internal/exporter"
@@ -187,6 +189,38 @@ func (a *App) ExportMarkdown(id string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+func (a *App) OpenSourceFile(path string, page int) error {
+	path = filepath.Clean(path)
+	if path == "." || !filepath.IsAbs(path) {
+		return fmt.Errorf("source path must be absolute")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("open source file: %w", err)
+	}
+	name, args, err := sourceOpenCommand(goruntime.GOOS, path)
+	if err != nil {
+		return err
+	}
+	command := exec.CommandContext(a.context(), name, args...)
+	if err = command.Start(); err != nil {
+		return fmt.Errorf("open source file at page %d: %w", page, err)
+	}
+	go func() { _ = command.Wait() }()
+	return nil
+}
+
+func sourceOpenCommand(goos, path string) (string, []string, error) {
+	switch goos {
+	case "darwin":
+		return "open", []string{path}, nil
+	case "linux":
+		return "xdg-open", []string{path}, nil
+	case "windows":
+		return "rundll32", []string{"url.dll,FileProtocolHandler", path}, nil
+	default:
+		return "", nil, fmt.Errorf("opening source files is not supported on %s", goos)
+	}
 }
 func (a *App) context() context.Context {
 	if a.ctx == nil {
