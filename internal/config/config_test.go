@@ -31,4 +31,7 @@ func TestLoadAppliesDefaultsToPartialNestedConfig(t *testing.T) {
 	if cfg.Processing.SegmentCharacters != 12000 {
 		t.Fatalf("got segment characters %d", cfg.Processing.SegmentCharacters)
 	}
+	if cfg.Tools.PDFToTextPath != "pdftotext" {
+		t.Fatalf("got pdftotext path %q", cfg.Tools.PDFToTextPath)
+	}
 }

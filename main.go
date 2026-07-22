@@ -15,6 +15,7 @@ import (
 	"github.com/alessio/tutorio/internal/llm"
 	"github.com/alessio/tutorio/internal/source"
 	"github.com/alessio/tutorio/internal/source/local"
+	"github.com/alessio/tutorio/internal/source/pdf"
 	"github.com/alessio/tutorio/internal/source/youtube"
 	"github.com/alessio/tutorio/internal/storage/sqlite"
 	"github.com/alessio/tutorio/internal/transcript"
@@ -55,6 +56,7 @@ func main() {
 	sources := source.NewRegistry(
 		youtube.New(cfg.Tools.YTDLPPath, youtube.OSCommandRunner{}),
 		local.NewTranscriptFile(transcript.NewFileParser()),
+		pdf.New(cfg.Tools.PDFToTextPath, pdf.OSCommandRunner{}),
 	)
 	progress := appui.NewEventReporter()
 	modelGenerator := guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow)

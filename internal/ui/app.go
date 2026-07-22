@@ -70,23 +70,30 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 	}
 	return a.pipeline.Run(a.context(), source.Request{Type: "transcript_file", URI: path})
 }
-func (a *App) SelectAndQueueTranscript() (jobs.Job, error) {
+func (a *App) SelectAndQueueFile() (jobs.Job, error) {
 	if a.manager == nil {
 		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
 	}
 	path, err := runtime.OpenFileDialog(a.context(), runtime.OpenDialogOptions{
-		Title:   "Import transcript",
-		Filters: []runtime.FileFilter{{DisplayName: "Transcript files", Pattern: "*.txt;*.srt;*.vtt"}},
+		Title: "Import source file",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Supported sources", Pattern: "*.pdf;*.txt;*.srt;*.vtt"},
+			{DisplayName: "PDF documents", Pattern: "*.pdf"},
+			{DisplayName: "Transcript files", Pattern: "*.txt;*.srt;*.vtt"},
+		},
 	})
 	if err != nil || path == "" {
 		return jobs.Job{}, err
 	}
+	sourceType := "transcript_file"
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".txt", ".srt", ".vtt":
+	case ".pdf":
+		sourceType = "pdf"
 	default:
-		return jobs.Job{}, fmt.Errorf("unsupported transcript file %q", filepath.Ext(path))
+		return jobs.Job{}, fmt.Errorf("unsupported source file %q", filepath.Ext(path))
 	}
-	return a.manager.Enqueue(a.context(), source.Request{Type: "transcript_file", URI: path})
+	return a.manager.Enqueue(a.context(), source.Request{Type: sourceType, URI: path})
 }
 func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
 func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }

@@ -25,3 +25,14 @@ func TestRenderIncludesEvidenceAndSourceLink(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderIncludesPDFPageReferences(t *testing.T) {
+	content, err := New().Render(context.Background(), guide.Guide{Title: "Book", Overview: "Overview", FinalOutcome: "Learned", SourceURI: "/tmp/My Book.pdf", Steps: []guide.Step{{Number: 1, Title: "Read", Explanation: "Understand", References: []guide.SourceReference{{Kind: "page", PageStart: 4, PageEnd: 6}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "pages 4-6") || !strings.Contains(text, "file:///tmp/My%20Book.pdf#page=4") {
+		t.Fatalf("missing page reference in:\n%s", text)
+	}
+}

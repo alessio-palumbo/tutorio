@@ -7,5 +7,6 @@ ollama:
   context_window: 32768
 tools:
   yt_dlp_path: yt-dlp
+  pdftotext_path: pdftotext
 processing:
   segment_characters: 12000

@@ -10,6 +10,7 @@ This repository provides a buildable Wails application and the architectural spi
 
 - YouTube subtitle retrieval through `yt-dlp`.
 - local `.txt`, `.srt`, and `.vtt` transcript ingestion.
+- local text-based PDF ingestion with page-aware citations through Poppler.
 - transcript cleaning and cue-aware segmentation.
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
@@ -96,6 +97,7 @@ For production evolution, add numbered embedded migrations rather than editing a
 - Wails v2 and its platform prerequisites.
 - Node.js/npm for the Vite frontend.
 - `yt-dlp` on `PATH` for YouTube sources.
+- Poppler's `pdftotext` on `PATH` for PDF sources.
 - Ollama running locally with the configured model, initially `qwen3:8b`.
 
 For example:
@@ -104,6 +106,14 @@ For example:
 ollama pull qwen3:8b
 ollama serve
 ```
+
+On macOS, install the local source tools with:
+
+```sh
+brew install yt-dlp poppler
+```
+
+Scanned or image-only PDFs are detected but require a future OCR adapter; Tutorio does not silently generate a guide from missing text.
 
 Tutorio invokes tools locally and sends model requests only to the configured Ollama URL.
 
@@ -127,6 +137,7 @@ ollama:
   context_window: 32768
 tools:
   yt_dlp_path: yt-dlp
+  pdftotext_path: pdftotext
 processing:
   segment_characters: 12000
 ```
