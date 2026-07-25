@@ -2,6 +2,15 @@
   "name": "tutorio-frontend",
   "private": true,
   "version": "0.1.0",
-  "scripts": { "dev": "vite", "build": "vite build", "preview": "vite preview" },
-  "devDependencies": { "vite": "^6.1.0" }
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0"
+  },
+  "dependencies": {
+    "katex": "^0.18.1"
+  }
 }

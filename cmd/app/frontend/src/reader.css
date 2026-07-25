@@ -54,3 +54,6 @@
 .evidence-links button { border: 1px solid #b9c7b8; }
 .source-links { margin-top: 16px; }
 .source-links h4 { margin: 0 0 8px; color: #59705b; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.lead p { margin: 0 0 18px; }
+.lead p:last-child { margin-bottom: 0; }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }

@@ -1,6 +1,8 @@
 import './style.css'
 import './reader.css'
 import './library.css'
+import 'katex/dist/katex.min.css'
+import renderMathInElement from 'katex/contrib/auto-render'
 
 const backend = () => window.go?.ui?.App
 const app = document.querySelector('#app')
@@ -49,6 +51,9 @@ function updateJobTimers(){document.querySelectorAll('[data-job-elapsed]').forEa
 const asArray = values => Array.isArray(values) ? values : values == null ? [] : [values]
 const meaningfulValues = values => asArray(values).filter(value => value != null && !['', '{}', '[]', 'null'].includes(String(value).trim()))
 const renderList = (title, values = []) => { const filtered = meaningfulValues(values); return filtered.length ? `<section><h2>${title}</h2><ul>${filtered.map(value => `<li>${escapeHTML(value)}</li>`).join('')}</ul></section>` : '' }
+const overviewParagraphs=value=>{const blocks=String(value??'').split(/\n\s*\n/).map(block=>block.trim()).filter(Boolean);if(blocks.length!==1||blocks[0].length<360)return blocks;const sentences=blocks[0].match(/[^.!?]+[.!?]+(?:["')\]]+)?|[^.!?]+$/g)||blocks;const paragraphs=[];let current='';for(const sentence of sentences){const next=`${current} ${sentence.trim()}`.trim();if(current&&next.length>280){paragraphs.push(current);current=sentence.trim()}else current=next}if(current)paragraphs.push(current);return paragraphs}
+const renderOverview=value=>`<div class="lead">${overviewParagraphs(value).map(paragraph=>`<p>${escapeHTML(paragraph)}</p>`).join('')}</div>`
+const repairMathText=root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);for(let node=walker.nextNode();node;node=walker.nextNode()){if(!node.nodeValue.includes('$'))continue;node.nodeValue=node.nodeValue.replace(/(^|[\s({])ext\{/g,'$1\\text{').replace(/(^|[\s({])rac\{/g,'$1\\frac{')}renderMathInElement(root,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false,strict:false})}
 const formatTime = seconds => { const value = Math.max(0, Math.round(Number(seconds) || 0)); return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}` }
 const timestampURL = (uri, seconds) => { try { const url = new URL(uri); url.searchParams.set('t', `${Math.max(0, Math.round(seconds))}s`); return url.toString() } catch { return '' } }
 const renderTimestamps = (values = [], sourceURI = '') => asArray(values).length ? `<div class="timestamps">${asArray(values).map(value => { const url = timestampURL(sourceURI, value.start_seconds); const label = `${formatTime(value.start_seconds)}${value.label ? ` · ${escapeHTML(value.label)}` : ''}`; return url ? `<button data-source-url="${escapeHTML(url)}" title="Open source at ${formatTime(value.start_seconds)}">${label} ↗</button>` : `<span>${label}</span>` }).join('')}</div>` : ''
@@ -76,7 +81,8 @@ function renderGuide(guide) {
   const commands = guide.commands?.length ? `<section><h2>Commands</h2>${guide.commands.map(command => `<div class="command"><pre><code>${escapeHTML(command.value)}</code></pre><p>${escapeHTML(command.description)}</p></div>`).join('')}</section>` : ''
   const shortcuts = guide.keyboard_shortcuts?.length ? `<section><h2>Keyboard shortcuts</h2><div class="shortcut-grid">${guide.keyboard_shortcuts.map(item => `<div><kbd>${escapeHTML(item.keys)}</kbd><span>${escapeHTML(item.action)}${item.context ? ` · ${escapeHTML(item.context)}` : ''}</span></div>`).join('')}</div></section>` : ''
   const generation = guide.generation?.model ? `<section class="generation"><h2>Generation details</h2><dl><div><dt>Model</dt><dd>${escapeHTML(guide.generation.model)}</dd></div><div><dt>Sections</dt><dd>${guide.generation.segment_count}</dd></div><div><dt>Duration</dt><dd>${Math.round(guide.generation.duration_milliseconds / 1000)}s</dd></div><div><dt>Tokens</dt><dd>${guide.generation.prompt_tokens} in · ${guide.generation.output_tokens} out</dd></div></dl></section>` : ''
-  guideContent.innerHTML = `<article class="guide"><span class="eyebrow">${escapeHTML(guide.source_type)} GUIDE</span><h1>${escapeHTML(guide.title)}</h1><p class="lead">${escapeHTML(guide.overview)}</p>${generation}<section class="outcome"><h2>Final outcome</h2><p>${escapeHTML(guide.final_outcome)}</p></section>${renderList('Prerequisites', guide.prerequisites)}<div class="guide-sections">${guideSections}</div>${renderList('Important concepts', guide.important_concepts)}${commands}${shortcuts}${renderList('Warnings', guide.warnings)}${renderList('Common mistakes', guide.common_mistakes)}${renderList('Cheat sheet', cheatSheet)}${renderList('Appendix', guide.appendix)}<section><h2>Source references</h2>${renderSourceReferences(guide.source_references,guide.source_timestamps,guide.source_uri)}</section></article>`
+  guideContent.innerHTML = `<article class="guide"><span class="eyebrow">${escapeHTML(guide.source_type)} GUIDE</span><h1>${escapeHTML(guide.title)}</h1>${renderOverview(guide.overview)}${generation}<section class="outcome"><h2>Final outcome</h2><p>${escapeHTML(guide.final_outcome)}</p></section>${renderList('Prerequisites', guide.prerequisites)}<div class="guide-sections">${guideSections}</div>${renderList('Important concepts', guide.important_concepts)}${commands}${shortcuts}${renderList('Warnings', guide.warnings)}${renderList('Common mistakes', guide.common_mistakes)}${renderList('Cheat sheet', cheatSheet)}${renderList('Appendix', guide.appendix)}<section><h2>Source references</h2>${renderSourceReferences(guide.source_references,guide.source_timestamps,guide.source_uri)}</section></article>`
+  repairMathText(guideContent)
 }
 
 function renderStepEditor(index) {
