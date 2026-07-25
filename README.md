@@ -21,7 +21,7 @@ This repository provides a buildable Wails application and the architectural spi
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
 - readable overview paragraphing, prerequisite deduplication, and locally bundled KaTeX formula rendering.
 - visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
-- collapsible guide sections that double as a compact index, with exact evidence kept at step level.
+- collapsible guide sections that double as a compact index, plus compact reference blocks for supporting material.
 - SQLite storage and a Wails guide library/reader.
 
 The UI is deliberately small. Model setup and native transcript-file selection remain in the usable-MVP phase described in [the roadmap](docs/ROADMAP.md).

@@ -28,6 +28,18 @@
 .step blockquote { margin: 18px 0 0; padding: 12px 15px; border-left: 3px solid #78907b; background: #f4f6f2; color: #4d514c; font-size: 14px; }
 .step blockquote span { display: block; margin-bottom: 5px; color: #657965; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .timestamps button { padding: 5px 9px; background: #e9eee8; color: #405941; font-size: 12px; font-weight: 500; }
+.reference-blocks { display: grid; gap: 10px; margin: 42px 0; }
+.reference-block { margin: 18px 0; overflow: hidden; border: 1px solid #d8d4c8; border-radius: 10px; background: #fbfaf6; }
+.reference-blocks .reference-block { margin: 0; }
+.reference-block summary { display: flex; align-items: center; gap: 12px; padding: 14px 17px; cursor: pointer; list-style: none; font: 19px Georgia,serif; }
+.reference-block summary::-webkit-details-marker { display: none; }
+.reference-block summary:hover,.reference-block summary:focus-visible { background: #f0f2ed; outline: none; }
+.reference-block summary:focus-visible { box-shadow: inset 0 0 0 2px #78907b; }
+.reference-block summary small { margin-left: auto; color: #657965; font: 12px Inter,ui-sans-serif,system-ui,sans-serif; font-weight: 700; }
+.reference-chevron { color: #59705b; font: 26px/1 Inter,ui-sans-serif,system-ui,sans-serif; transform: none; transition: transform .15s ease; }
+.reference-block[open] .reference-chevron { transform: rotate(90deg); }
+.reference-content { padding: 8px 20px 20px; border-top: 1px solid #e4e1d8; }
+.reference-content > ul { margin: 10px 0 0; padding-left: 22px; }
 .generation dl { display: flex; flex-wrap: wrap; gap: 10px; }
 .generation dl div { min-width: 130px; padding: 12px; background: #fff; border: 1px solid #dedbd2; border-radius: 8px; }
 .generation dt { color: #657965; font-size: 11px; text-transform: uppercase; }
