@@ -29,9 +29,16 @@
 }
 
 .guide-card {
+  display: flex;
+  flex-direction: column;
   position: relative;
   padding: 24px 48px 20px 20px;
   cursor: pointer;
+}
+
+.guide-card small {
+  margin: auto 0 16px;
+  padding-top: 16px;
 }
 
 .guide-card:hover,
