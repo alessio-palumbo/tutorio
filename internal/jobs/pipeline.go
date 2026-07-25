@@ -107,10 +107,11 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 		return guide.Guide{}, p.fail(ctx, &job, fmt.Errorf("store segments: %w", err))
 	}
 	logger.InfoContext(ctx, "transcript segmented", "segments", len(segments))
-	p.report(ctx, "generating", "Generating guide sections…", 0, len(segments))
+	p.report(ctx, "generating", fmt.Sprintf("Generating section 1 of %d…", len(segments)), 0, len(segments))
 	p.updateJob(ctx, &job, "generating", 0, len(segments))
 	generated, err := p.generator.Generate(ctx, guide.GenerateRequest{Title: doc.Title, SourceType: request.Type, SourceURI: request.URI, SourceID: doc.SourceID, Segments: segments, OnProgress: func(current, total int) {
-		p.report(ctx, "generating", fmt.Sprintf("Generating section %d of %d…", current, total), current, total)
+		active := activeSection(current, total)
+		p.report(ctx, "generating", fmt.Sprintf("Generating section %d of %d…", active, total), current, total)
 		p.updateJob(ctx, &job, "generating", current, total)
 	}, OnSegment: func(result guide.SectionResult) {
 		_ = p.store.CompleteSegment(ctx, segmentResult(job.ID, result, StatusCompleted))
@@ -148,6 +149,13 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	logger.InfoContext(ctx, "guide compiled", "title", generated.Title)
 	p.report(ctx, "complete", "Guide compiled and saved.", 1, 1)
 	return generated, nil
+}
+
+func activeSection(completed, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	return min(completed+1, total)
 }
 
 func (p *Pipeline) persistEvidence(ctx context.Context, doc transcript.Document) error {

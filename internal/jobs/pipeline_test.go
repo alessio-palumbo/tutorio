@@ -45,6 +45,15 @@ func TestPipelineRunsStages(t *testing.T) {
 	}
 }
 
+func TestActiveSectionAdvancesBeyondCompletedCount(t *testing.T) {
+	if got := activeSection(9, 12); got != 10 {
+		t.Fatalf("active section = %d, want 10", got)
+	}
+	if got := activeSection(12, 12); got != 12 {
+		t.Fatalf("completed job section = %d, want 12", got)
+	}
+}
+
 func TestMarkEditedSteps(t *testing.T) {
 	previous := []guide.Step{{ID: "step_0_1", Title: "Original", Actions: []string{"one"}}}
 	updated := []guide.Step{{ID: "step_0_1", Title: "Revised", Actions: []string{"one"}}}
