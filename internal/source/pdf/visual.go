@@ -30,7 +30,7 @@ func (r *PageRenderer) Render(ctx context.Context, source evidence.Source, physi
 		return evidence.Visual{}, fmt.Errorf("physical PDF page must be positive")
 	}
 	page := strconv.Itoa(physicalPage)
-	output, err := r.runner.Run(ctx, r.binary, "-png", "-singlefile", "-f", page, "-l", page, "-scale-to", "1400", source.Locator, "-")
+	output, err := r.runner.Run(ctx, r.binary, "-png", "-singlefile", "-f", page, "-l", page, "-scale-to", "2000", source.Locator, "-")
 	if err != nil {
 		return evidence.Visual{}, fmt.Errorf("render PDF page %d with %s: %w", physicalPage, r.binary, err)
 	}

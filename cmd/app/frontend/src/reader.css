@@ -42,8 +42,9 @@
 .deep-dive p { line-height: 1.7; }
 .deep-dive section { margin: 20px 0 0; }
 @media(max-width:650px){.guide-section-head{display:grid}.section-actions{width:100%}.section-actions button{flex:1}}
-.evidence-panel { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: rgba(31, 37, 32, .34); }
-.evidence-card { width: min(540px, 94vw); height: 100%; overflow: auto; padding: 34px; background: #faf8f2; box-shadow: -16px 0 40px rgba(31, 37, 32, .18); }
+body.evidence-open { overflow: hidden; }
+.evidence-panel { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; overflow: hidden; overscroll-behavior: none; background: rgba(31, 37, 32, .34); }
+.evidence-card { width: min(540px, 94vw); height: 100%; overflow: auto; overscroll-behavior: contain; padding: 34px; background: #faf8f2; box-shadow: -16px 0 40px rgba(31, 37, 32, .18); }
 .evidence-close { float: right; }
 .evidence-card h2 { clear: both; margin: 28px 0 4px; font: 30px Georgia, serif; }
 .evidence-location { margin-top: 7px; color: #59705b; font-weight: 700; }
@@ -59,4 +60,13 @@
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .visual-evidence { margin: 28px 0!important; }
 .visual-evidence h3 { margin: 0 0 12px; font: 22px Georgia,serif; }
-.visual-evidence img { display: block; width: 100%; height: auto; border: 1px solid #d8d4c8; border-radius: 8px; background: #fff; }
+.visual-preview-button { position: relative; display: block; width: 100%; padding: 0; overflow: hidden; border: 1px solid #d8d4c8; border-radius: 8px; background: #fff; }
+.visual-preview-button img { display: block; width: 100%; height: auto; }
+.visual-preview-button span { position: absolute; right: 10px; bottom: 10px; padding: 6px 9px; border-radius: 6px; background: rgba(32,35,31,.82); color: #fff; font-size: 12px; }
+.image-lightbox { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: auto 1fr; background: rgba(20,24,21,.94); overscroll-behavior: none; }
+.lightbox-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 14px; }
+.lightbox-toolbar button { min-width: 44px; color: #fff; border-color: #7d847e; }
+.lightbox-stage { min-width: 0; min-height: 0; display: grid; place-items: center; overflow: hidden; touch-action: none; }
+.lightbox-stage img { display: block; max-width: 92vw; max-height: 88vh; user-select: none; transform-origin: center; transition: transform .08s ease-out; }
+.lightbox-stage.can-pan { cursor: grab; }
+.lightbox-stage.can-pan:active { cursor: grabbing; }

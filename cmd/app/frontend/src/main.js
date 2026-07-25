@@ -19,6 +19,7 @@ app.innerHTML = `
     <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Compilation queue</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
     <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="export-guide">Export Markdown</button></div><div id="guide-content"></div></section>
     <aside id="evidence-panel" class="evidence-panel" hidden aria-label="Source evidence"><div class="evidence-card"><button class="quiet evidence-close" id="close-evidence" aria-label="Close evidence">Close</button><div id="evidence-content"></div></div></aside>
+    <div id="image-lightbox" class="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="Zoomed source page"><div class="lightbox-toolbar"><button class="quiet" data-zoom-out aria-label="Zoom out">−</button><button class="quiet" data-zoom-reset>100%</button><button class="quiet" data-zoom-in aria-label="Zoom in">+</button><button class="quiet" data-zoom-close>Close</button></div><div class="lightbox-stage"><img alt=""></div></div>
   </main>`
 
 const message = document.querySelector('#message')
@@ -29,6 +30,9 @@ const reader = document.querySelector('#reader')
 const guideContent = document.querySelector('#guide-content')
 const evidencePanel = document.querySelector('#evidence-panel')
 const evidenceContent = document.querySelector('#evidence-content')
+const imageLightbox = document.querySelector('#image-lightbox')
+const lightboxStage = imageLightbox.querySelector('.lightbox-stage')
+const lightboxImage = imageLightbox.querySelector('img')
 const jobs = document.querySelector('#jobs')
 const jobArea = document.querySelector('#job-area')
 let currentGuide = null
@@ -116,12 +120,29 @@ jobs.addEventListener('click',async event=>{const retry=event.target.closest('[d
 document.querySelector('#back').addEventListener('click', () => { closeEvidence(); reader.hidden = true; library.hidden = false })
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
 guideContent.addEventListener('click', event => { const link = event.target.closest('[data-source-url]'); if (link) window.runtime?.BrowserOpenURL?.(link.dataset.sourceUrl) })
-function closeEvidence(){evidencePanel.hidden=true;evidencePanel.dataset.citationId='';evidenceContent.innerHTML=''}
-function showEvidencePanel(content){evidenceContent.innerHTML=content;evidencePanel.hidden=false}
+function closeEvidence(){closeImageZoom();evidencePanel.hidden=true;evidencePanel.dataset.citationId='';evidenceContent.innerHTML='';document.body.classList.remove('evidence-open')}
+function showEvidencePanel(content){evidenceContent.innerHTML=content;evidencePanel.hidden=false;document.body.classList.add('evidence-open')}
 document.querySelector('#close-evidence').addEventListener('click',closeEvidence)
 evidencePanel.addEventListener('click',event=>{if(event.target===evidencePanel)closeEvidence()})
 guideContent.addEventListener('click',async event=>{const link=event.target.closest('[data-citation-id]');if(!link)return;const citationID=link.dataset.citationId;evidencePanel.dataset.citationId=citationID;showEvidencePanel('<p class="muted">Loading source evidence…</p>');try{const value=await backend().GetCitationEvidence(currentGuide.id,citationID);const page=value.chunk?.location?.physical_page;const before=value.previous?.text;const after=value.next?.text;if(evidencePanel.dataset.citationId!==citationID)return;showEvidencePanel(`<span class="eyebrow">SOURCE EVIDENCE</span><h2>${escapeHTML(value.source?.title||currentGuide.title)}</h2><p class="evidence-location">${page?`PDF page ${page}`:'Source location unavailable'}</p><div class="evidence-context">${before?`<p>${escapeHTML(before)}</p>`:''}<mark>${escapeHTML(value.chunk?.text||'No extracted text is available.')}</mark>${after?`<p>${escapeHTML(after)}</p>`:''}</div>${page?'<section class="visual-evidence"><h3>Page preview</h3><div data-visual-preview><p class="muted">Rendering this PDF page locally…</p></div></section>':''}<button data-open-citation="${escapeHTML(citationID)}">Open full PDF</button>${page?`<p class="muted">If your system viewer does not jump automatically, navigate to PDF page ${page}.</p>`:''}`);if(page)loadCitationVisual(citationID,page)}catch(err){showEvidencePanel(`<h2>Evidence unavailable</h2><p>${escapeHTML(err)}</p>`)}})
-async function loadCitationVisual(citationID,page){const target=evidenceContent.querySelector('[data-visual-preview]');if(!target)return;const cacheKey=`${currentGuide.source_id}:${page}`;try{let visual=visualEvidenceCache.get(cacheKey);if(!visual){visual=await backend().GetCitationVisual(currentGuide.id,citationID);visualEvidenceCache.set(cacheKey,visual)}if(evidencePanel.dataset.citationId!==citationID)return;target.innerHTML=`<img src="${escapeHTML(visual.data_url)}" alt="Rendered PDF page ${Number(visual.physical_page)||''}">`}catch(err){if(evidencePanel.dataset.citationId===citationID)target.innerHTML=`<p class="muted">Page preview unavailable: ${escapeHTML(err)}</p>`}}
+async function loadCitationVisual(citationID,page){const target=evidenceContent.querySelector('[data-visual-preview]');if(!target)return;const cacheKey=`${currentGuide.source_id}:${page}`;try{let visual=visualEvidenceCache.get(cacheKey);if(!visual){visual=await backend().GetCitationVisual(currentGuide.id,citationID);visualEvidenceCache.set(cacheKey,visual)}if(evidencePanel.dataset.citationId!==citationID)return;target.innerHTML=`<button class="visual-preview-button" data-zoom-image title="Click to enlarge"><img src="${escapeHTML(visual.data_url)}" alt="Rendered PDF page ${Number(visual.physical_page)||''}"><span>Click to zoom</span></button>`}catch(err){if(evidencePanel.dataset.citationId===citationID)target.innerHTML=`<p class="muted">Page preview unavailable: ${escapeHTML(err)}</p>`}}
+let lightboxScale=1,lightboxX=0,lightboxY=0,lightboxDrag=null
+function updateImageZoom(){lightboxImage.style.transform=`translate(${lightboxX}px,${lightboxY}px) scale(${lightboxScale})`;imageLightbox.querySelector('[data-zoom-reset]').textContent=`${Math.round(lightboxScale*100)}%`;lightboxStage.classList.toggle('can-pan',lightboxScale>1)}
+function setImageZoom(scale){lightboxScale=Math.min(5,Math.max(1,scale));if(lightboxScale===1)lightboxX=lightboxY=0;updateImageZoom()}
+function openImageZoom(image){lightboxImage.src=image.src;lightboxImage.alt=image.alt;lightboxScale=1;lightboxX=lightboxY=0;imageLightbox.hidden=false;updateImageZoom()}
+function closeImageZoom(){imageLightbox.hidden=true;lightboxImage.removeAttribute('src');lightboxDrag=null}
+evidenceContent.addEventListener('click',event=>{const button=event.target.closest('[data-zoom-image]');if(button)openImageZoom(button.querySelector('img'))})
+imageLightbox.addEventListener('click',event=>{if(event.target===imageLightbox||event.target===lightboxStage)closeImageZoom()})
+imageLightbox.querySelector('[data-zoom-close]').addEventListener('click',closeImageZoom)
+imageLightbox.querySelector('[data-zoom-in]').addEventListener('click',()=>setImageZoom(lightboxScale+.25))
+imageLightbox.querySelector('[data-zoom-out]').addEventListener('click',()=>setImageZoom(lightboxScale-.25))
+imageLightbox.querySelector('[data-zoom-reset]').addEventListener('click',()=>setImageZoom(1))
+lightboxStage.addEventListener('wheel',event=>{event.preventDefault();setImageZoom(lightboxScale+(event.deltaY<0?.2:-.2))},{passive:false})
+lightboxStage.addEventListener('pointerdown',event=>{if(lightboxScale<=1)return;lightboxDrag={x:event.clientX,y:event.clientY,startX:lightboxX,startY:lightboxY};lightboxStage.setPointerCapture(event.pointerId)})
+lightboxStage.addEventListener('pointermove',event=>{if(!lightboxDrag)return;lightboxX=lightboxDrag.startX+event.clientX-lightboxDrag.x;lightboxY=lightboxDrag.startY+event.clientY-lightboxDrag.y;updateImageZoom()})
+lightboxStage.addEventListener('pointerup',()=>{lightboxDrag=null})
+lightboxStage.addEventListener('pointercancel',()=>{lightboxDrag=null})
+document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(!imageLightbox.hidden)closeImageZoom();else if(!evidencePanel.hidden)closeEvidence()})
 guideContent.addEventListener('click',event=>{const link=event.target.closest('[data-legacy-page]');if(!link)return;const page=Number(link.dataset.legacyPage)||1;showEvidencePanel(`<span class="eyebrow">SOURCE REFERENCE</span><h2>${escapeHTML(currentGuide.title)}</h2><p class="evidence-location">PDF page ${page}</p><p>This older guide has a page reference but no stored source excerpt. Recompile the PDF to create exact source evidence.</p><button data-open-legacy="${page}">Open full PDF</button><p class="muted">If your system viewer does not jump automatically, navigate to PDF page ${page}.</p>`)})
 evidenceContent.addEventListener('click',async event=>{const citation=event.target.closest('[data-open-citation]');const legacy=event.target.closest('[data-open-legacy]');if(!citation&&!legacy)return;const button=citation||legacy;button.disabled=true;try{if(citation)await backend().OpenCitationSource(currentGuide.id,citation.dataset.openCitation);else await backend().OpenGuideSource(currentGuide.id,Number(legacy.dataset.openLegacy)||1)}catch(err){message.textContent=String(err);button.disabled=false}})
 guideContent.addEventListener('click',event=>{const button=event.target.closest('[data-edit-step]');if(button)renderStepEditor(Number(button.dataset.editStep))})
