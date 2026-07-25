@@ -16,14 +16,29 @@ type Cue struct {
 	End       time.Duration `json:"end"`
 	Text      string        `json:"text"`
 	Reference Reference     `json:"reference,omitempty"`
+	ChunkID   string        `json:"chunk_id,omitempty"`
+	ChunkKind string        `json:"chunk_kind,omitempty"`
+	Sequence  int           `json:"sequence,omitempty"`
 }
 
 // Document is the normalized transcript exchanged by pipeline stages.
 type Document struct {
-	SourceID string `json:"source_id"`
-	Title    string `json:"title"`
-	Language string `json:"language,omitempty"`
-	Cues     []Cue  `json:"cues"`
+	SourceID    string `json:"source_id"`
+	Title       string `json:"title"`
+	Language    string `json:"language,omitempty"`
+	Cues        []Cue  `json:"cues"`
+	SourceKind  string `json:"source_kind,omitempty"`
+	SourceURI   string `json:"source_uri,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+	Extractor   string `json:"extractor,omitempty"`
+}
+
+type SourceChunk struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Text      string    `json:"text"`
+	Reference Reference `json:"reference"`
+	Sequence  int       `json:"sequence"`
 }
 
 // Segment is a bounded group of cues suitable for an LLM context.
@@ -33,4 +48,5 @@ type Segment struct {
 	End       time.Duration `json:"end"`
 	Text      string        `json:"text"`
 	Reference Reference     `json:"reference,omitempty"`
+	Chunks    []SourceChunk `json:"chunks,omitempty"`
 }

@@ -57,3 +57,17 @@ func TestSegmenterHardSplitsOversizedCue(t *testing.T) {
 		t.Fatalf("timestamps not preserved: %#v", got)
 	}
 }
+
+func TestSegmenterPreservesSourceChunks(t *testing.T) {
+	doc := Document{Cues: []Cue{
+		{Text: "First extracted unit", ChunkID: "chunk_one", ChunkKind: "text", Sequence: 0, Reference: Reference{Kind: "page", PageStart: 3, PageEnd: 3}},
+		{Text: "Second extracted unit", ChunkID: "chunk_two", ChunkKind: "text", Sequence: 1, Reference: Reference{Kind: "page", PageStart: 4, PageEnd: 4}},
+	}}
+	got, err := NewSegmenter(1000).Segment(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || len(got[0].Chunks) != 2 || got[0].Chunks[1].ID != "chunk_two" || got[0].Reference.PageEnd != 4 {
+		t.Fatalf("unexpected chunked segment: %#v", got)
+	}
+}

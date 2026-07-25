@@ -53,6 +53,7 @@ func main() {
 	provider := llm.NewOllama(http.DefaultClient, cfg.Ollama.BaseURL, cfg.Ollama.Model)
 	repository := sqlite.NewGuideRepository(db)
 	jobStore := sqlite.NewJobStore(db)
+	evidenceRepository := sqlite.NewEvidenceRepository(db)
 	sources := source.NewRegistry(
 		youtube.New(cfg.Tools.YTDLPPath, youtube.OSCommandRunner{}),
 		local.NewTranscriptFile(transcript.NewFileParser()),
@@ -60,7 +61,7 @@ func main() {
 	)
 	progress := appui.NewEventReporter()
 	modelGenerator := guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow)
-	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), modelGenerator, guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore).WithExpander(modelGenerator)
+	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), modelGenerator, guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore).WithExpander(modelGenerator).WithEvidenceRepository(evidenceRepository)
 	manager := jobs.NewManager(pipeline, jobStore, logger)
 	app := appui.NewApp(pipeline, repository, logger, markdown.New(), manager, progress)
 

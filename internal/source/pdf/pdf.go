@@ -4,10 +4,15 @@ package pdf
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/alessio/tutorio/internal/source"
@@ -39,6 +44,10 @@ type Source struct {
 	runner CommandRunner
 }
 
+const extractorVersion = "pdftotext-layout-v1"
+
+var chunkBoundary = regexp.MustCompile(`\n[\t ]*\n+`)
+
 func New(binary string, runner CommandRunner) *Source {
 	if strings.TrimSpace(binary) == "" {
 		binary = "pdftotext"
@@ -49,6 +58,10 @@ func New(binary string, runner CommandRunner) *Source {
 func (*Source) Type() string { return "pdf" }
 
 func (s *Source) Fetch(ctx context.Context, request source.Request) (transcript.Document, error) {
+	fingerprint, err := fingerprintFile(request.URI)
+	if err != nil {
+		return transcript.Document{}, fmt.Errorf("fingerprint PDF: %w", err)
+	}
 	output, err := s.runner.Run(ctx, s.binary, "-layout", "-enc", "UTF-8", request.URI, "-")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -57,17 +70,18 @@ func (s *Source) Fetch(ctx context.Context, request source.Request) (transcript.
 		return transcript.Document{}, fmt.Errorf("extract PDF text with %s: %w", s.binary, err)
 	}
 	pages := strings.Split(strings.ReplaceAll(string(output), "\r\n", "\n"), "\f")
-	cues := make([]transcript.Cue, 0, len(pages))
+	cues := make([]transcript.Cue, 0, len(pages)*3)
+	sequence := 0
 	for index, page := range pages {
 		if err = ctx.Err(); err != nil {
 			return transcript.Document{}, err
 		}
-		page = strings.TrimSpace(page)
-		if page == "" {
-			continue
-		}
 		pageNumber := index + 1
-		cues = append(cues, transcript.Cue{Text: page, Reference: transcript.Reference{Kind: "page", PageStart: pageNumber, PageEnd: pageNumber, Label: fmt.Sprintf("Page %d", pageNumber)}})
+		for _, text := range splitSourceChunks(page, 4000) {
+			id := sourceChunkID(fingerprint, pageNumber, text)
+			cues = append(cues, transcript.Cue{Text: text, Reference: transcript.Reference{Kind: "page", PageStart: pageNumber, PageEnd: pageNumber, Label: fmt.Sprintf("PDF page %d", pageNumber)}, ChunkID: id, ChunkKind: "text", Sequence: sequence})
+			sequence++
+		}
 	}
 	if len(cues) == 0 {
 		return transcript.Document{}, fmt.Errorf("PDF contains no extractable text; scanned or image-only PDFs require OCR, which is not implemented yet")
@@ -76,5 +90,46 @@ func (s *Source) Fetch(ctx context.Context, request source.Request) (transcript.
 	if request.Title != "" {
 		title = request.Title
 	}
-	return transcript.Document{SourceID: request.URI, Title: title, Cues: cues}, nil
+	return transcript.Document{SourceID: "src_" + fingerprint, SourceKind: "pdf", SourceURI: request.URI, Fingerprint: fingerprint, Extractor: extractorVersion, Title: title, Cues: cues}, nil
 }
+
+func fingerprintFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err = io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
+func sourceChunkID(fingerprint string, physicalPage int, text string) string {
+	identity := fingerprint + "\x00" + extractorVersion + "\x00" + strconv.Itoa(physicalPage) + "\x00text\x00" + normalizeChunkText(text)
+	return fmt.Sprintf("chk_%x", sha256.Sum256([]byte(identity)))
+}
+
+func splitSourceChunks(page string, limit int) []string {
+	page = strings.ReplaceAll(page, "\r\n", "\n")
+	blocks := chunkBoundary.Split(strings.TrimSpace(page), -1)
+	result := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		block = normalizeChunkText(block)
+		for len(block) > limit {
+			cut := strings.LastIndexAny(block[:limit], " \t\n")
+			if cut < limit/2 {
+				cut = limit
+			}
+			result = append(result, strings.TrimSpace(block[:cut]))
+			block = strings.TrimSpace(block[cut:])
+		}
+		if block != "" {
+			result = append(result, block)
+		}
+	}
+	return result
+}
+
+func normalizeChunkText(value string) string { return strings.Join(strings.Fields(value), " ") }

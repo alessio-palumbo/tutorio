@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/guide"
 	"github.com/alessio/tutorio/internal/source"
 	"github.com/alessio/tutorio/internal/transcript"
@@ -20,6 +21,7 @@ type Pipeline struct {
 	segmenter  transcript.Segmenter
 	generator  guide.Generator
 	expander   guide.Expander
+	evidence   evidence.Repository
 	verifier   guide.Verifier
 	repository guide.Repository
 	logger     *slog.Logger
@@ -36,6 +38,10 @@ func NewPipeline(s source.Resolver, c transcript.Cleaner, sg transcript.Segmente
 }
 func (p *Pipeline) WithExpander(expander guide.Expander) *Pipeline {
 	p.expander = expander
+	return p
+}
+func (p *Pipeline) WithEvidenceRepository(repository evidence.Repository) *Pipeline {
+	p.evidence = repository
 	return p
 }
 func (p *Pipeline) WithStore(store Store) *Pipeline {
@@ -88,6 +94,9 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	if err != nil {
 		return guide.Guide{}, p.fail(ctx, &job, fmt.Errorf("cleaning stage: %w", err))
 	}
+	if err = p.persistEvidence(ctx, doc); err != nil {
+		return guide.Guide{}, p.fail(ctx, &job, fmt.Errorf("evidence stage: %w", err))
+	}
 	p.report(ctx, "segmenting", "Splitting transcript into model-sized sections…", 0, 0)
 	p.updateJob(ctx, &job, "segmenting", 0, 0)
 	segments, err := p.segmenter.Segment(ctx, doc)
@@ -139,6 +148,32 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	logger.InfoContext(ctx, "guide compiled", "title", generated.Title)
 	p.report(ctx, "complete", "Guide compiled and saved.", 1, 1)
 	return generated, nil
+}
+
+func (p *Pipeline) persistEvidence(ctx context.Context, doc transcript.Document) error {
+	if p.evidence == nil || doc.SourceKind == "" || doc.Fingerprint == "" {
+		return nil
+	}
+	now := time.Now().UTC()
+	metadata := map[string]string{}
+	if doc.Extractor != "" {
+		metadata["extractor"] = doc.Extractor
+	}
+	value := evidence.Source{ID: doc.SourceID, Kind: doc.SourceKind, Locator: doc.SourceURI, Title: doc.Title, Fingerprint: doc.Fingerprint, Metadata: metadata, CreatedAt: now}
+	if err := p.evidence.SaveSource(ctx, value); err != nil {
+		return fmt.Errorf("save source: %w", err)
+	}
+	chunks := make([]evidence.SourceChunk, 0, len(doc.Cues))
+	for _, cue := range doc.Cues {
+		if cue.ChunkID == "" {
+			continue
+		}
+		chunks = append(chunks, evidence.SourceChunk{ID: cue.ChunkID, SourceID: doc.SourceID, Kind: evidence.SourceChunkKind(cue.ChunkKind), Text: cue.Text, Location: evidence.SourceLocation{PhysicalPage: cue.Reference.PageStart}, Sequence: cue.Sequence, CreatedAt: now})
+	}
+	if len(chunks) == 0 {
+		return nil
+	}
+	return p.evidence.SaveChunks(ctx, chunks)
 }
 
 func (p *Pipeline) updateJob(ctx context.Context, job *Job, stage string, current, total int) {

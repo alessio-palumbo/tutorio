@@ -27,12 +27,14 @@ func (s CueSegmenter) Segment(ctx context.Context, doc Document) ([]Segment, err
 	var b strings.Builder
 	var start, end = doc.Cues[0].Start, doc.Cues[0].End
 	reference := doc.Cues[0].Reference
+	var chunks []SourceChunk
 	flush := func() {
 		if b.Len() == 0 {
 			return
 		}
-		result = append(result, Segment{Index: len(result), Start: start, End: end, Text: strings.TrimSpace(b.String()), Reference: reference})
+		result = append(result, Segment{Index: len(result), Start: start, End: end, Text: strings.TrimSpace(b.String()), Reference: reference, Chunks: chunks})
 		b.Reset()
+		chunks = nil
 	}
 	for _, originalCue := range doc.Cues {
 		cues := splitCue(originalCue, s.maxCharacters)
@@ -49,6 +51,9 @@ func (s CueSegmenter) Segment(ctx context.Context, doc Document) ([]Segment, err
 				b.WriteByte(' ')
 			}
 			b.WriteString(cue.Text)
+			if cue.ChunkID != "" {
+				chunks = append(chunks, SourceChunk{ID: cue.ChunkID, Kind: cue.ChunkKind, Text: cue.Text, Reference: cue.Reference, Sequence: cue.Sequence})
+			}
 			end = cue.End
 			if cue.Reference.Kind != "" {
 				if reference.Kind == "" {
@@ -74,7 +79,7 @@ func splitCue(cue Cue, limit int) []Cue {
 	for index, text := range parts {
 		start := cue.Start + timeFraction(duration, index, len(parts))
 		end := cue.Start + timeFraction(duration, index+1, len(parts))
-		result = append(result, Cue{Start: start, End: end, Text: text, Reference: cue.Reference})
+		result = append(result, Cue{Start: start, End: end, Text: text, Reference: cue.Reference, ChunkID: cue.ChunkID, ChunkKind: cue.ChunkKind, Sequence: cue.Sequence})
 	}
 	return result
 }
