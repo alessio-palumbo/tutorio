@@ -73,21 +73,27 @@ jobs:
       - name: Package macOS app
         if: runner.os == 'macOS'
         run: |
-          mkdir -p release
-          ditto -c -k --keepParent build/bin/tutorio.app release/${{ matrix.archive }}
+          mkdir -p release/package
+          cp -R build/bin/tutorio.app release/package/
+          cp README.md LICENSE release/package/
+          ditto -c -k --sequesterRsrc release/package/ release/${{ matrix.archive }}
 
       - name: Package Windows app
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path build/bin/* -DestinationPath release/${{ matrix.archive }}
+          New-Item -ItemType Directory -Force -Path release/package | Out-Null
+          Copy-Item -Path build/bin/* -Destination release/package -Recurse
+          Copy-Item -Path README.md, LICENSE -Destination release/package
+          Compress-Archive -Path release/package/* -DestinationPath release/${{ matrix.archive }}
 
       - name: Package Linux app
         if: runner.os == 'Linux'
         run: |
-          mkdir -p release
-          tar -czf release/${{ matrix.archive }} -C build/bin .
+          mkdir -p release/package
+          cp -R build/bin/. release/package/
+          cp README.md LICENSE release/package/
+          tar -czf release/${{ matrix.archive }} -C release/package .
 
       - name: Upload packaged build
         uses: actions/upload-artifact@v7
