@@ -107,9 +107,9 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
-	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not tutorial steps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use numeric start_seconds and end_seconds measured from the start of the complete video, plus label. Unknown arrays must be empty.`
+	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not tutorial steps; keep them concise and do not repeat equivalent requirements. Write mathematical notation as valid LaTeX between $ delimiters and JSON-escape every backslash. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use numeric start_seconds and end_seconds measured from the start of the complete video, plus label. Unknown arrays must be empty.`
 	if segment.Reference.Kind == "page" {
-		prompt = `Reconstruct this section of a document as part of a practical learning manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and terminology. Extract useful shortcuts and concise references in the cheat_sheet. Do not invent information from pages you have not seen. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not procedural steps. Every step must include number, title, explanation, actions, commands, warnings, an empty timestamps array, and evidence_chunk_ids. evidence_chunk_ids must be an array containing at most five IDs copied exactly from source_chunks that directly support the step. Never invent an ID and never cite a chunk merely because it is nearby. If no supplied chunk directly supports a step, return an empty evidence_chunk_ids array. Unknown arrays must be empty.`
+		prompt = `Reconstruct this section of a document as part of a practical learning manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and terminology. Extract useful shortcuts and concise references in the cheat_sheet. Do not invent information from pages you have not seen. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not procedural steps; keep them concise and do not repeat equivalent requirements. Write mathematical notation as valid LaTeX between $ delimiters and JSON-escape every backslash. Every step must include number, title, explanation, actions, commands, warnings, an empty timestamps array, and evidence_chunk_ids. evidence_chunk_ids must be an array containing at most five IDs copied exactly from source_chunks that directly support the step. Never invent an ID and never cite a chunk merely because it is nearby. If no supplied chunk directly supports a step, return an empty evidence_chunk_ids array. Unknown arrays must be empty.`
 	}
 	response, err := g.provider.Complete(ctx, llm.Request{Format: "json", Temperature: 0, MaxTokens: g.maxTokens, ContextSize: g.contextSize, Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: fmt.Sprintf("Tutorial title: %s\nSection %d of %d:\n%s", title, current, total, data)}}})
 	if err != nil {
@@ -128,6 +128,7 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 		result.Steps[index].ID = fmt.Sprintf("step_%d_%d", segment.Index, index+1)
 		result.Steps[index].SourceSegment = segment.Index
 	}
+	result.Prerequisites = appendUniqueSimilar(nil, result.Prerequisites...)
 	resolveStepCitations(&result, segment)
 	anchorGuideSource(&result, segment)
 	if len(segment.Chunks) == 0 {
@@ -473,7 +474,7 @@ func mergeGuides(title string, guides []Guide) Guide {
 	result := Guide{Title: title}
 	for _, item := range guides {
 		result.Overview = joinText(result.Overview, item.Overview)
-		result.Prerequisites = appendUnique(result.Prerequisites, item.Prerequisites...)
+		result.Prerequisites = appendUniqueSimilar(result.Prerequisites, item.Prerequisites...)
 		if item.FinalOutcome != "" {
 			result.FinalOutcome = item.FinalOutcome
 		}
@@ -632,6 +633,34 @@ func appendUnique(values []string, additions ...string) []string {
 		values = append(values, v)
 	}
 	return values
+}
+
+func appendUniqueSimilar(values []string, additions ...string) []string {
+	for _, addition := range additions {
+		key := comparableText(addition)
+		if !meaningfulText(key) {
+			continue
+		}
+		duplicate := false
+		for _, existing := range values {
+			other := comparableText(existing)
+			if key == other || (len(key) >= 18 && len(other) >= 18 && (strings.Contains(key, other) || strings.Contains(other, key))) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			values = append(values, strings.TrimSpace(addition))
+		}
+	}
+	return values
+}
+
+func comparableText(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.Join(strings.FieldsFunc(value, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+	}), " ")
 }
 
 func meaningfulText(value string) bool {

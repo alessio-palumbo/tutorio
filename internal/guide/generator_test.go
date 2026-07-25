@@ -133,6 +133,18 @@ func TestValidateSourceExcerptsRejectsUnsupportedText(t *testing.T) {
 	}
 }
 
+func TestAppendUniqueSimilarCollapsesRepeatedPrerequisites(t *testing.T) {
+	got := appendUniqueSimilar(nil,
+		"Basic understanding of neural networks.",
+		"basic understanding of neural networks",
+		"Basic understanding of neural networks and attention mechanisms",
+		"Python installed",
+	)
+	if len(got) != 2 || got[1] != "Python installed" {
+		t.Fatalf("unexpected prerequisites: %#v", got)
+	}
+}
+
 type malformedProvider struct{}
 
 func (malformedProvider) Complete(context.Context, llm.Request) (llm.Response, error) {
