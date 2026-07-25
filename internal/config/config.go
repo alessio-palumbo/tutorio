@@ -26,8 +26,9 @@ type Ollama struct {
 	ContextWindow   int    `yaml:"context_window"`
 }
 type Tools struct {
-	YTDLPPath     string `yaml:"yt_dlp_path"`
-	PDFToTextPath string `yaml:"pdftotext_path"`
+	YTDLPPath      string `yaml:"yt_dlp_path"`
+	PDFToTextPath  string `yaml:"pdftotext_path"`
+	PDFToCairoPath string `yaml:"pdftocairo_path"`
 }
 type Processing struct {
 	SegmentCharacters int `yaml:"segment_characters"`
@@ -57,7 +58,7 @@ func defaults() Config {
 	if err != nil {
 		dir = "."
 	}
-	return Config{Database: Database{Path: filepath.Join(dir, "tutorio", "tutorio.db")}, Ollama: Ollama{BaseURL: "http://127.0.0.1:11434", Model: "qwen3:8b", MaxOutputTokens: 8192, ContextWindow: 32768}, Tools: Tools{YTDLPPath: "yt-dlp", PDFToTextPath: "pdftotext"}, Processing: Processing{SegmentCharacters: 12000}}
+	return Config{Database: Database{Path: filepath.Join(dir, "tutorio", "tutorio.db")}, Ollama: Ollama{BaseURL: "http://127.0.0.1:11434", Model: "qwen3:8b", MaxOutputTokens: 8192, ContextWindow: 32768}, Tools: Tools{YTDLPPath: "yt-dlp", PDFToTextPath: "pdftotext", PDFToCairoPath: "pdftocairo"}, Processing: Processing{SegmentCharacters: 12000}}
 }
 func Load(path string) (Config, error) {
 	cfg := defaults()
@@ -88,6 +89,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Tools.PDFToTextPath == "" {
 		cfg.Tools.PDFToTextPath = "pdftotext"
+	}
+	if cfg.Tools.PDFToCairoPath == "" {
+		cfg.Tools.PDFToCairoPath = "pdftocairo"
 	}
 	return cfg, nil
 }

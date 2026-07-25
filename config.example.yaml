@@ -8,5 +8,6 @@ ollama:
 tools:
   yt_dlp_path: yt-dlp
   pdftotext_path: pdftotext
+  pdftocairo_path: pdftocairo
 processing:
   segment_characters: 12000

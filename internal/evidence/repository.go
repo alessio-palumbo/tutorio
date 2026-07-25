@@ -8,3 +8,7 @@ type Repository interface {
 	GetSource(ctx context.Context, id string) (Source, error)
 	GetEvidence(ctx context.Context, id string) (Evidence, error)
 }
+
+type VisualProvider interface {
+	Render(ctx context.Context, source Source, physicalPage int) (Visual, error)
+}

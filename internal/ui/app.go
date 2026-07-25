@@ -29,6 +29,12 @@ type App struct {
 	exporter exporter.Exporter
 	manager  *jobs.Manager
 	evidence evidence.Repository
+	visual   evidence.VisualProvider
+}
+
+func (a *App) WithVisualProvider(provider evidence.VisualProvider) *App {
+	a.visual = provider
+	return a
 }
 
 func NewApp(pipeline *jobs.Pipeline, guides guide.Repository, evidenceRepository evidence.Repository, logger *slog.Logger, output exporter.Exporter, manager *jobs.Manager, progress ...*EventReporter) *App {
@@ -220,6 +226,20 @@ func (a *App) OpenCitationSource(guideID, citationID string) error {
 		return err
 	}
 	return a.openRegisteredSource(result.Source, result.Chunk.Location.PhysicalPage)
+}
+
+func (a *App) GetCitationVisual(guideID, citationID string) (evidence.Visual, error) {
+	if a.visual == nil {
+		return evidence.Visual{}, fmt.Errorf("visual evidence is not configured")
+	}
+	result, err := a.GetCitationEvidence(guideID, citationID)
+	if err != nil {
+		return evidence.Visual{}, err
+	}
+	if result.Chunk.Location.PhysicalPage < 1 {
+		return evidence.Visual{}, fmt.Errorf("citation has no physical PDF page")
+	}
+	return a.visual.Render(a.context(), result.Source, result.Chunk.Location.PhysicalPage)
 }
 
 func (a *App) OpenGuideSource(guideID string, page int) error {

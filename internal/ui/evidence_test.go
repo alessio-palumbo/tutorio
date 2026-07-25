@@ -29,6 +29,16 @@ type evidenceRepositoryStub struct {
 	err   error
 }
 
+type visualProviderStub struct {
+	source evidence.Source
+	page   int
+}
+
+func (p *visualProviderStub) Render(_ context.Context, source evidence.Source, page int) (evidence.Visual, error) {
+	p.source, p.page = source, page
+	return evidence.Visual{Kind: evidence.EvidenceImage, SourceID: source.ID, PhysicalPage: page, MediaType: "image/png", DataURL: "data:image/png;base64,AA=="}, nil
+}
+
 func (r evidenceRepositoryStub) SaveSource(context.Context, evidence.Source) error {
 	return errors.New("not implemented")
 }
@@ -63,5 +73,24 @@ func TestCitationEvidenceRejectsDifferentSource(t *testing.T) {
 
 	if _, err := app.GetCitationEvidence("guide-1", "citation-1"); err == nil {
 		t.Fatal("expected evidence from a different source to be rejected")
+	}
+}
+
+func TestCitationVisualUsesAuthorizedEvidenceLocation(t *testing.T) {
+	saved := guide.Guide{ID: "guide-1", SourceID: "source-1", Steps: []guide.Step{{Citations: []guide.Citation{{ID: "citation-1", EvidenceID: "evidence-1"}}}}}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	visuals := &visualProviderStub{}
+	app := NewApp(nil, guideRepositoryStub{value: saved}, evidenceRepositoryStub{value: evidence.Evidence{
+		ID: "evidence-1", SourceID: "source-1",
+		Source: evidence.Source{ID: "source-1", Kind: "pdf", Locator: "/private/book.pdf"},
+		Chunk:  evidence.SourceChunk{Location: evidence.SourceLocation{PhysicalPage: 17}},
+	}}, logger, nil, nil).WithVisualProvider(visuals)
+
+	got, err := app.GetCitationVisual("guide-1", "citation-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PhysicalPage != 17 || visuals.page != 17 || visuals.source.Locator != "/private/book.pdf" {
+		t.Fatalf("visual did not use authorized source location: %#v %#v", got, visuals)
 	}
 }

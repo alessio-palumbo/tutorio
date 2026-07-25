@@ -37,7 +37,10 @@ type SourceChunk struct {
 
 type Kind string
 
-const EvidenceText Kind = "text"
+const (
+	EvidenceText  Kind = "text"
+	EvidenceImage Kind = "image"
+)
 
 type Evidence struct {
 	ID        string       `json:"id"`
@@ -49,4 +52,12 @@ type Evidence struct {
 	Chunk     SourceChunk  `json:"chunk"`
 	Previous  *SourceChunk `json:"previous,omitempty"`
 	Next      *SourceChunk `json:"next,omitempty"`
+}
+
+type Visual struct {
+	Kind         Kind   `json:"kind"`
+	SourceID     string `json:"source_id"`
+	PhysicalPage int    `json:"physical_page"`
+	MediaType    string `json:"media_type"`
+	DataURL      string `json:"data_url"`
 }
