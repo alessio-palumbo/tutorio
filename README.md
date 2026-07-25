@@ -15,7 +15,7 @@ This repository provides a buildable Wails application and the architectural spi
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
-- interrupted-job-first recovery and user-controlled “Run next” ordering for pending compilations.
+- interrupted-job-first recovery and user-controlled “Run first” preemption for pending compilations; completed sections and source identity are retained.
 - persistent per-section results with targeted retry after interruption.
 - active-section timing, slow-call indicators, and inspectable local model diagnostics.
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.

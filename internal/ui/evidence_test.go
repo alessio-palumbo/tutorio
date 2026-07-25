@@ -94,3 +94,19 @@ func TestCitationVisualUsesAuthorizedEvidenceLocation(t *testing.T) {
 		t.Fatalf("visual did not use authorized source location: %#v %#v", got, visuals)
 	}
 }
+
+func TestGetGuideRepairsLegacyRecoveredMetadataFromOwnedCitation(t *testing.T) {
+	saved := guide.Guide{ID: "guide-1", Title: "Recovered tutorial", Steps: []guide.Step{{Citations: []guide.Citation{{ID: "citation-1", EvidenceID: "evidence-1"}}}}}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := NewApp(nil, guideRepositoryStub{value: saved}, evidenceRepositoryStub{value: evidence.Evidence{
+		ID: "evidence-1", SourceID: "source-1", Source: evidence.Source{ID: "source-1", Title: "Original source title"},
+	}}, logger, nil, nil)
+
+	got, err := app.GetGuide("guide-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Original source title" || got.SourceID != "source-1" {
+		t.Fatalf("legacy metadata was not repaired: %#v", got)
+	}
+}

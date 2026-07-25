@@ -31,17 +31,18 @@ type Manager struct {
 	queue    chan queuedJob
 	priority chan queuedJob
 
-	mu      sync.Mutex
-	wg      sync.WaitGroup
-	ctx     context.Context
-	cancel  context.CancelFunc
-	active  map[string]context.CancelFunc
-	queued  map[string]bool
-	started bool
+	mu        sync.Mutex
+	wg        sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
+	active    map[string]context.CancelFunc
+	queued    map[string]bool
+	preempted map[string]bool
+	started   bool
 }
 
 func NewManager(runner jobRunner, store Store, logger *slog.Logger) *Manager {
-	return &Manager{runner: runner, store: store, logger: logger, queue: make(chan queuedJob, 100), priority: make(chan queuedJob, 100), active: map[string]context.CancelFunc{}, queued: map[string]bool{}}
+	return &Manager{runner: runner, store: store, logger: logger, queue: make(chan queuedJob, 100), priority: make(chan queuedJob, 100), active: map[string]context.CancelFunc{}, queued: map[string]bool{}, preempted: map[string]bool{}}
 }
 
 // Start launches the worker and requeues work interrupted by the previous shutdown.
@@ -131,9 +132,9 @@ func (m *Manager) Cancel(ctx context.Context, id string) error {
 	return m.store.Update(ctx, job)
 }
 
-// Prioritize schedules a pending job ahead of other pending work. It does not
-// interrupt the active model request.
-func (m *Manager) Prioritize(ctx context.Context, id string) (Job, error) {
+// RunFirst pauses the active job and gives a pending job the next worker slot.
+// Completed sections remain persisted; only an in-flight section is restarted.
+func (m *Manager) RunFirst(ctx context.Context, id string) (Job, error) {
 	job, err := m.store.Get(ctx, id)
 	if err != nil {
 		return Job{}, err
@@ -150,12 +151,25 @@ func (m *Manager) Prioritize(ctx context.Context, id string) (Job, error) {
 	}
 	select {
 	case m.priority <- queuedJob{id: id, resume: resume}:
-		return job, nil
 	case <-managerCtx.Done():
 		return Job{}, managerCtx.Err()
 	case <-ctx.Done():
 		return Job{}, ctx.Err()
 	}
+	m.mu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(m.active))
+	for activeID, cancel := range m.active {
+		if activeID == id {
+			continue
+		}
+		m.preempted[activeID] = true
+		cancels = append(cancels, cancel)
+	}
+	m.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	return job, nil
 }
 
 func (m *Manager) enqueue(item queuedJob) error {
@@ -232,13 +246,25 @@ func (m *Manager) run(item queuedJob) {
 	if ctx.Err() != nil {
 		job, getErr := m.store.Get(context.Background(), item.id)
 		if getErr == nil {
+			m.mu.Lock()
+			wasPreempted := m.preempted[item.id]
+			delete(m.preempted, item.id)
+			m.mu.Unlock()
 			if m.ctx.Err() != nil {
 				job.Status, job.Stage, job.Error = StatusRunning, "interrupted", ""
+			} else if wasPreempted {
+				job.Status, job.Stage, job.Error = StatusPending, "queued", ""
 			} else {
 				job.Status, job.Stage, job.Error = StatusCancelled, "cancelled", ""
 			}
 			job.UpdatedAt = time.Now().UTC()
 			_ = m.store.Update(context.Background(), job)
+			if wasPreempted && m.ctx.Err() == nil {
+				segments, segmentErr := m.store.Segments(context.Background(), item.id)
+				if segmentErr == nil {
+					_ = m.enqueue(queuedJob{id: item.id, resume: len(segments) > 0})
+				}
+			}
 		}
 		return
 	}

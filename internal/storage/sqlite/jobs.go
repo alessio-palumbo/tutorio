@@ -14,11 +14,11 @@ type JobStore struct{ db *sql.DB }
 
 func NewJobStore(db *sql.DB) *JobStore { return &JobStore{db: db} }
 func (s *JobStore) Create(ctx context.Context, j jobs.Job) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO jobs(id,source_type,source_uri,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.SourceType, j.SourceURI, j.Status, j.Stage, j.Current, j.Total, j.Error, j.GuideID, formatTime(j.CreatedAt), formatTime(j.UpdatedAt), nullableTime(j.CompletedAt))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO jobs(id,source_type,source_uri,source_title,source_id,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.SourceType, j.SourceURI, j.SourceTitle, j.SourceID, j.Status, j.Stage, j.Current, j.Total, j.Error, j.GuideID, formatTime(j.CreatedAt), formatTime(j.UpdatedAt), nullableTime(j.CompletedAt))
 	return err
 }
 func (s *JobStore) Update(ctx context.Context, j jobs.Job) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE jobs SET status=?,stage=?,current=?,total=?,error=?,guide_id=?,updated_at=?,completed_at=? WHERE id=?`, j.Status, j.Stage, j.Current, j.Total, j.Error, j.GuideID, formatTime(j.UpdatedAt), nullableTime(j.CompletedAt), j.ID)
+	_, err := s.db.ExecContext(ctx, `UPDATE jobs SET source_title=?,source_id=?,status=?,stage=?,current=?,total=?,error=?,guide_id=?,updated_at=?,completed_at=? WHERE id=?`, j.SourceTitle, j.SourceID, j.Status, j.Stage, j.Current, j.Total, j.Error, j.GuideID, formatTime(j.UpdatedAt), nullableTime(j.CompletedAt), j.ID)
 	return err
 }
 func (s *JobStore) SaveSegments(ctx context.Context, jobID string, segments []transcript.Segment) error {
@@ -59,14 +59,14 @@ func (s *JobStore) RecordSegmentFailure(ctx context.Context, value jobs.Segment)
 	return err
 }
 func (s *JobStore) Get(ctx context.Context, id string) (jobs.Job, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id,source_type,source_uri,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at FROM jobs WHERE id=?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT id,source_type,source_uri,source_title,source_id,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at FROM jobs WHERE id=?`, id)
 	return scanJob(row)
 }
 func (s *JobStore) List(ctx context.Context, limit int) ([]jobs.Job, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,source_type,source_uri,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at FROM jobs ORDER BY created_at DESC LIMIT ?`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,source_type,source_uri,source_title,source_id,status,stage,current,total,error,guide_id,created_at,updated_at,completed_at FROM jobs ORDER BY created_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func scanJob(row rowScanner) (jobs.Job, error) {
 	var j jobs.Job
 	var created, updated string
 	var completed sql.NullString
-	if err := row.Scan(&j.ID, &j.SourceType, &j.SourceURI, &j.Status, &j.Stage, &j.Current, &j.Total, &j.Error, &j.GuideID, &created, &updated, &completed); err != nil {
+	if err := row.Scan(&j.ID, &j.SourceType, &j.SourceURI, &j.SourceTitle, &j.SourceID, &j.Status, &j.Stage, &j.Current, &j.Total, &j.Error, &j.GuideID, &created, &updated, &completed); err != nil {
 		return jobs.Job{}, err
 	}
 	var err error

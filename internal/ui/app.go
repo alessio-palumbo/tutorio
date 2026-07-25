@@ -105,8 +105,39 @@ func (a *App) SelectAndQueueFile() (jobs.Job, error) {
 	}
 	return a.manager.Enqueue(a.context(), source.Request{Type: sourceType, URI: path})
 }
-func (a *App) ListGuides() ([]guide.Summary, error)    { return a.guides.List(a.context(), 100) }
-func (a *App) GetGuide(id string) (guide.Guide, error) { return a.guides.Get(a.context(), id) }
+func (a *App) ListGuides() ([]guide.Summary, error) { return a.guides.List(a.context(), 100) }
+func (a *App) GetGuide(id string) (guide.Guide, error) {
+	value, err := a.guides.Get(a.context(), id)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	if (value.Title == "Recovered tutorial" || value.SourceID == "") && a.evidence != nil {
+		if resolved, ok := a.firstGuideEvidence(value); ok {
+			if value.Title == "Recovered tutorial" && resolved.Source.Title != "" {
+				value.Title = resolved.Source.Title
+			}
+			if value.SourceID == "" {
+				value.SourceID = resolved.SourceID
+			}
+			if saved, saveErr := a.guides.Save(a.context(), value); saveErr == nil {
+				value = saved
+			}
+		}
+	}
+	return value, nil
+}
+
+func (a *App) firstGuideEvidence(value guide.Guide) (evidence.Evidence, bool) {
+	for _, step := range value.Steps {
+		for _, citation := range step.Citations {
+			resolved, err := a.evidence.GetEvidence(a.context(), citation.EvidenceID)
+			if err == nil {
+				return resolved, true
+			}
+		}
+	}
+	return evidence.Evidence{}, false
+}
 func (a *App) DeleteGuide(id string) (bool, error) {
 	value, err := a.guides.Get(a.context(), id)
 	if err != nil {
@@ -166,11 +197,11 @@ func (a *App) RetryJob(id string) (jobs.Job, error) {
 	}
 	return a.manager.Retry(a.context(), id)
 }
-func (a *App) PrioritizeJob(id string) (jobs.Job, error) {
+func (a *App) RunFirstJob(id string) (jobs.Job, error) {
 	if a.manager == nil {
 		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
 	}
-	return a.manager.Prioritize(a.context(), id)
+	return a.manager.RunFirst(a.context(), id)
 }
 func (a *App) CancelJob(id string) error {
 	if a.manager == nil {
@@ -220,7 +251,7 @@ func (a *App) GetCitationEvidence(guideID, citationID string) (evidence.Evidence
 	if err != nil {
 		return evidence.Evidence{}, fmt.Errorf("load citation evidence: %w", err)
 	}
-	if result.SourceID != value.SourceID {
+	if value.SourceID != "" && result.SourceID != value.SourceID {
 		return evidence.Evidence{}, fmt.Errorf("citation source does not belong to this guide")
 	}
 	return result, nil

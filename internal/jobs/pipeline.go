@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/alessio/tutorio/internal/evidence"
@@ -87,6 +89,8 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	if err != nil {
 		return guide.Guide{}, p.fail(ctx, &job, fmt.Errorf("source stage: %w", err))
 	}
+	job.SourceTitle = doc.Title
+	job.SourceID = doc.SourceID
 	logger.InfoContext(ctx, "source retrieved", "cues", len(doc.Cues))
 	p.report(ctx, "cleaning", "Cleaning transcript…", 0, 0)
 	p.updateJob(ctx, &job, "cleaning", 0, 0)
@@ -234,12 +238,13 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	_ = p.store.Update(ctx, job)
 	partials := make([]guide.Guide, 0, len(sections))
 	metadata := guide.Generation{JobID: job.ID, SegmentCount: len(sections)}
-	title := "Recovered tutorial"
+	title := recoveredTitle(job, sections)
+	sourceID := recoveredSourceID(job, sections)
 	for index := range sections {
 		section := &sections[index]
 		if section.Status != StatusCompleted || len(section.Guide.Steps) == 0 {
 			p.report(ctx, "generating", fmt.Sprintf("Retrying section %d of %d…", index+1, len(sections)), index, len(sections))
-			generated, generationErr := p.generator.Generate(ctx, guide.GenerateRequest{Title: title, SourceType: job.SourceType, SourceURI: job.SourceURI, Segments: []transcript.Segment{section.Transcript}, OnFailure: func(result guide.SectionResult) {
+			generated, generationErr := p.generator.Generate(ctx, guide.GenerateRequest{Title: title, SourceType: job.SourceType, SourceURI: job.SourceURI, SourceID: sourceID, Segments: []transcript.Segment{section.Transcript}, OnFailure: func(result guide.SectionResult) {
 				_ = p.store.RecordSegmentFailure(ctx, segmentResult(job.ID, result, StatusFailed))
 			}})
 			if generationErr != nil {
@@ -255,9 +260,6 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 				return guide.Guide{}, p.fail(ctx, &job, err)
 			}
 		}
-		if section.Guide.Title != "" {
-			title = section.Guide.Title
-		}
 		partials = append(partials, section.Guide)
 		metadata.Model = section.Model
 		metadata.PromptTokens += section.PromptTokens
@@ -267,6 +269,7 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	result := guide.Merge(title, partials)
 	result.SourceType = job.SourceType
 	result.SourceURI = job.SourceURI
+	result.SourceID = sourceID
 	result.Generation = metadata
 	if err = p.verifier.Verify(ctx, result); err != nil {
 		return guide.Guide{}, p.fail(ctx, &job, err)
@@ -286,6 +289,37 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	_ = p.store.Update(ctx, job)
 	p.report(ctx, "complete", "Recovered job completed and saved.", 1, 1)
 	return result, nil
+}
+
+func recoveredSourceID(job Job, sections []Segment) string {
+	if job.SourceID != "" {
+		return job.SourceID
+	}
+	for _, section := range sections {
+		if section.Guide.SourceID != "" {
+			return section.Guide.SourceID
+		}
+	}
+	return ""
+}
+
+func recoveredTitle(job Job, sections []Segment) string {
+	if title := strings.TrimSpace(job.SourceTitle); title != "" {
+		return title
+	}
+	for _, section := range sections {
+		if section.Status == StatusCompleted {
+			if title := strings.TrimSpace(section.Guide.Title); title != "" && title != "Recovered tutorial" {
+				return title
+			}
+		}
+	}
+	if job.SourceType == "pdf" || job.SourceType == "transcript_file" {
+		if base := strings.TrimSuffix(filepath.Base(job.SourceURI), filepath.Ext(job.SourceURI)); base != "" && base != "." {
+			return base
+		}
+	}
+	return "Recovered tutorial"
 }
 
 func (p *Pipeline) Sections(ctx context.Context, guideID string) ([]Segment, error) {

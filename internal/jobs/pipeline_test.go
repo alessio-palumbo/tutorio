@@ -54,6 +54,31 @@ func TestActiveSectionAdvancesBeyondCompletedCount(t *testing.T) {
 	}
 }
 
+func TestRecoveryPreservesSourceIdentityAndTitle(t *testing.T) {
+	sections := []Segment{
+		{Status: StatusCompleted, Guide: guide.Guide{Title: "Attention Is All You Need", SourceID: "source-1"}},
+	}
+	job := Job{SourceTitle: "Attention Is All You Need", SourceID: "source-1"}
+	if got := recoveredTitle(job, sections); got != "Attention Is All You Need" {
+		t.Fatalf("recovered title = %q", got)
+	}
+	if got := recoveredSourceID(job, sections); got != "source-1" {
+		t.Fatalf("recovered source ID = %q", got)
+	}
+}
+
+func TestLegacyRecoveryUsesCompletedSectionMetadata(t *testing.T) {
+	sections := []Segment{
+		{Status: StatusCompleted, Guide: guide.Guide{Title: "Original title", SourceID: "legacy-source"}},
+	}
+	if got := recoveredTitle(Job{}, sections); got != "Original title" {
+		t.Fatalf("legacy recovered title = %q", got)
+	}
+	if got := recoveredSourceID(Job{}, sections); got != "legacy-source" {
+		t.Fatalf("legacy recovered source ID = %q", got)
+	}
+}
+
 func TestMarkEditedSteps(t *testing.T) {
 	previous := []guide.Step{{ID: "step_0_1", Title: "Original", Actions: []string{"one"}}}
 	updated := []guide.Step{{ID: "step_0_1", Title: "Revised", Actions: []string{"one"}}}

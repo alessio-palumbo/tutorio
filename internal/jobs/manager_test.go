@@ -101,7 +101,7 @@ func TestManagerQueuesAndCancelsWork(t *testing.T) {
 	t.Fatal("cancelled job did not reach cancelled state")
 }
 
-func TestManagerPrioritizesPendingWorkWithoutInterruptingActiveJob(t *testing.T) {
+func TestManagerRunsPendingWorkFirstAndRequeuesActiveJob(t *testing.T) {
 	store := newManagerStore()
 	runner := &managerRunner{store: store, started: make(chan string, 4)}
 	manager := NewManager(runner, store, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -125,19 +125,23 @@ func TestManagerPrioritizesPendingWorkWithoutInterruptingActiveJob(t *testing.T)
 	if err := manager.enqueue(queuedJob{id: "next"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Prioritize(context.Background(), "next"); err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.Cancel(context.Background(), "active"); err != nil {
+	if _, err := manager.RunFirst(context.Background(), "next"); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case started := <-runner.started:
 		if started != "next" {
-			t.Fatalf("started %q, want prioritized job", started)
+			t.Fatalf("started %q, want run-first job", started)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("prioritized job did not start")
+		t.Fatal("run-first job did not start")
+	}
+	paused, err := store.Get(context.Background(), "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused.Status != StatusPending || paused.Stage != "queued" {
+		t.Fatalf("active job was not safely requeued: %#v", paused)
 	}
 }
 

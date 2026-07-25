@@ -22,6 +22,8 @@ type Job struct {
 	ID          string     `json:"id"`
 	SourceType  string     `json:"source_type"`
 	SourceURI   string     `json:"source_uri"`
+	SourceTitle string     `json:"source_title,omitempty"`
+	SourceID    string     `json:"source_id,omitempty"`
 	Status      Status     `json:"status"`
 	Stage       string     `json:"stage"`
 	Current     int        `json:"current"`
