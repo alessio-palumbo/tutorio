@@ -8,7 +8,7 @@ const backend = () => window.go?.ui?.App
 const app = document.querySelector('#app')
 
 app.innerHTML = `
-  <header><div><span class="eyebrow">LOCAL LEARNING WORKBENCH</span><h1>tutorio</h1></div><div class="status">Local only</div></header>
+  <header><div><span class="eyebrow">LOCAL LEARNING WORKBENCH</span><h1>tutorio</h1></div></header>
   <main>
     <section class="create">
       <h2>Compile a tutorial</h2>
@@ -26,6 +26,7 @@ app.innerHTML = `
 const message = document.querySelector('#message')
 const progress = document.querySelector('#progress')
 const guides = document.querySelector('#guides')
+const create = document.querySelector('.create')
 const library = document.querySelector('#library')
 const reader = document.querySelector('#reader')
 const backToTop = document.querySelector('#back-to-top')
@@ -102,7 +103,7 @@ function renderGuide(guide) {
   const commands = guide.commands?.length ? `<section><h2>Commands</h2>${guide.commands.map(command => `<div class="command"><pre><code>${escapeHTML(command.value)}</code></pre><p>${escapeHTML(command.description)}</p></div>`).join('')}</section>` : ''
   const shortcuts = guide.keyboard_shortcuts?.length ? `<section><h2>Keyboard shortcuts</h2><div class="shortcut-grid">${guide.keyboard_shortcuts.map(item => `<div><kbd>${escapeHTML(item.keys)}</kbd><span>${escapeHTML(item.action)}${item.context ? ` · ${escapeHTML(item.context)}` : ''}</span></div>`).join('')}</div></section>` : ''
   const generation = guide.generation?.model ? `<section class="generation"><h2>Generation details</h2><dl><div><dt>Model</dt><dd>${escapeHTML(guide.generation.model)}</dd></div><div><dt>Sections</dt><dd>${guide.generation.segment_count}</dd></div><div><dt>Duration</dt><dd>${Math.round(guide.generation.duration_milliseconds / 1000)}s</dd></div><div><dt>Tokens</dt><dd>${guide.generation.prompt_tokens} in · ${guide.generation.output_tokens} out</dd></div></dl></section>` : ''
-  guideContent.innerHTML = `<article class="guide"><span class="eyebrow">${escapeHTML(guide.source_type)} GUIDE</span><h1>${escapeHTML(guide.title)}</h1>${renderOverview(guide.overview)}${generation}<section class="outcome"><h2>Final outcome</h2><p>${escapeHTML(guide.final_outcome)}</p></section>${renderList('Prerequisites', guide.prerequisites)}${sectionControls}<div class="guide-sections">${guideSections}</div>${renderList('Important concepts', guide.important_concepts)}${commands}${shortcuts}${renderList('Warnings', guide.warnings)}${renderList('Common mistakes', guide.common_mistakes)}${renderList('Cheat sheet', cheatSheet)}${renderList('Appendix', guide.appendix)}</article>`
+  guideContent.innerHTML = `<article class="guide"><span class="eyebrow">${escapeHTML(String(guide.source_type||'').toUpperCase())} GUIDE</span><h1>${escapeHTML(guide.title)}</h1>${renderOverview(guide.overview)}${generation}<section class="outcome"><h2>Final outcome</h2><p>${escapeHTML(guide.final_outcome)}</p></section>${renderList('Prerequisites', guide.prerequisites)}${sectionControls}<div class="guide-sections">${guideSections}</div>${renderList('Important concepts', guide.important_concepts)}${commands}${shortcuts}${renderList('Warnings', guide.warnings)}${renderList('Common mistakes', guide.common_mistakes)}${renderList('Cheat sheet', cheatSheet)}${renderList('Appendix', guide.appendix)}</article>`
   repairMathText(guideContent)
 }
 
@@ -120,7 +121,7 @@ async function saveStep(event,index) {
 
 async function openGuide(id) {
   libraryScrollY=window.scrollY
-  try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); library.hidden = true; reader.hidden = false; const position=readGuidePosition(id);requestAnimationFrame(()=>{const maximum=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);window.scrollTo({top:Math.min(position,maximum),behavior:'auto'});lastWindowScroll=window.scrollY}) }
+  try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); create.hidden = true; library.hidden = true; reader.hidden = false; const position=readGuidePosition(id);requestAnimationFrame(()=>{const maximum=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);window.scrollTo({top:Math.min(position,maximum),behavior:'auto'});lastWindowScroll=window.scrollY}) }
   catch (err) { message.textContent = String(err) }
 }
 
@@ -134,7 +135,7 @@ document.querySelector('#refresh').addEventListener('click', loadGuides)
 document.querySelector('#import-file').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const job=await backend().SelectAndQueueFile();if(job?.id){message.textContent='File compilation queued.';progress.hidden=false;progress.querySelector('div').style.width='4%';await loadJobs()}}catch(err){message.textContent=String(err)}finally{button.disabled=false}})
 guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){remove.disabled=true;try{const deleted=await backend().DeleteGuide(remove.dataset.deleteGuide);if(deleted){forgetGuidePosition(remove.dataset.deleteGuide);forgetExpandedSections(remove.dataset.deleteGuide);message.textContent='Guide deleted.';await loadGuides()}else{remove.disabled=false}}catch(err){message.textContent=String(err);remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
 jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const runFirst=event.target.closest('[data-run-first-job]');const cancel=event.target.closest('[data-cancel-job]');const diagnostic=event.target.closest('[data-show-job]');const button=retry||runFirst||cancel||diagnostic;if(!button)return;button.disabled=true;try{if(diagnostic){const sections=await backend().GetJobSections(diagnostic.dataset.showJob);const failed=[...sections].reverse().find(section=>section.error||section.raw_response);const card=diagnostic.closest('[data-job]');card.querySelector('.job-diagnostic')?.remove();card.insertAdjacentHTML('beforeend',`<details class="job-diagnostic" open><summary>Section ${(failed?.index??0)+1} model response</summary><p>${escapeHTML(failed?.error||'No section error was recorded.')}</p>${failed?.raw_response?`<pre><code>${escapeHTML(failed.raw_response)}</code></pre>`:'<p>No raw response was returned by the model.</p>'}</details>`);button.disabled=false;return}if(retry){await backend().RetryJob(retry.dataset.retryJob);message.textContent='Failed section requeued; completed sections will be reused.'}else if(runFirst){await backend().RunFirstJob(runFirst.dataset.runFirstJob);message.textContent='Pausing the active compilation; this one will run first.'}else{await backend().CancelJob(cancel.dataset.cancelJob);message.textContent='Compilation cancelled.'}await loadJobs()}catch(err){message.textContent=String(err);button.disabled=false}})
-function returnToLibrary(){saveGuidePosition();closeEvidence();reader.hidden=true;library.hidden=false;backToTop.hidden=true;requestAnimationFrame(()=>window.scrollTo({top:libraryScrollY,behavior:'auto'}))}
+function returnToLibrary(){saveGuidePosition();closeEvidence();reader.hidden=true;create.hidden=false;library.hidden=false;backToTop.hidden=true;requestAnimationFrame(()=>window.scrollTo({top:libraryScrollY,behavior:'auto'}))}
 document.querySelector('#back').addEventListener('click',returnToLibrary)
 backToTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}))
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
