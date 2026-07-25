@@ -63,7 +63,7 @@ func main() {
 	modelGenerator := guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow)
 	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), modelGenerator, guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore).WithExpander(modelGenerator).WithEvidenceRepository(evidenceRepository)
 	manager := jobs.NewManager(pipeline, jobStore, logger)
-	app := appui.NewApp(pipeline, repository, logger, markdown.New(), manager, progress)
+	app := appui.NewApp(pipeline, repository, evidenceRepository, logger, markdown.New(), manager, progress)
 
 	err = wails.Run(&options.App{
 		Title: "tutorio", Width: 1200, Height: 800,

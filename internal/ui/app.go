@@ -12,6 +12,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
+	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/exporter"
 	"github.com/alessio/tutorio/internal/guide"
 	"github.com/alessio/tutorio/internal/jobs"
@@ -27,10 +28,11 @@ type App struct {
 	progress *EventReporter
 	exporter exporter.Exporter
 	manager  *jobs.Manager
+	evidence evidence.Repository
 }
 
-func NewApp(pipeline *jobs.Pipeline, guides guide.Repository, logger *slog.Logger, output exporter.Exporter, manager *jobs.Manager, progress ...*EventReporter) *App {
-	app := &App{pipeline: pipeline, guides: guides, logger: logger, exporter: output, manager: manager}
+func NewApp(pipeline *jobs.Pipeline, guides guide.Repository, evidenceRepository evidence.Repository, logger *slog.Logger, output exporter.Exporter, manager *jobs.Manager, progress ...*EventReporter) *App {
+	app := &App{pipeline: pipeline, guides: guides, evidence: evidenceRepository, logger: logger, exporter: output, manager: manager}
 	if len(progress) > 0 {
 		app.progress = progress[0]
 	}
@@ -190,10 +192,72 @@ func (a *App) ExportMarkdown(id string) (string, error) {
 	}
 	return path, nil
 }
-func (a *App) OpenSourceFile(path string, page int) error {
-	path = filepath.Clean(path)
+func (a *App) GetCitationEvidence(guideID, citationID string) (evidence.Evidence, error) {
+	value, err := a.guides.Get(a.context(), guideID)
+	if err != nil {
+		return evidence.Evidence{}, err
+	}
+	citation, ok := findCitation(value, citationID)
+	if !ok {
+		return evidence.Evidence{}, fmt.Errorf("citation does not belong to this guide")
+	}
+	if a.evidence == nil {
+		return evidence.Evidence{}, fmt.Errorf("evidence repository is not configured")
+	}
+	result, err := a.evidence.GetEvidence(a.context(), citation.EvidenceID)
+	if err != nil {
+		return evidence.Evidence{}, fmt.Errorf("load citation evidence: %w", err)
+	}
+	if result.SourceID != value.SourceID {
+		return evidence.Evidence{}, fmt.Errorf("citation source does not belong to this guide")
+	}
+	return result, nil
+}
+
+func (a *App) OpenCitationSource(guideID, citationID string) error {
+	result, err := a.GetCitationEvidence(guideID, citationID)
+	if err != nil {
+		return err
+	}
+	return a.openRegisteredSource(result.Source, result.Chunk.Location.PhysicalPage)
+}
+
+func (a *App) OpenGuideSource(guideID string, page int) error {
+	value, err := a.guides.Get(a.context(), guideID)
+	if err != nil {
+		return err
+	}
+	if value.SourceType != "pdf" {
+		return fmt.Errorf("guide source is not a PDF")
+	}
+	if a.evidence != nil {
+		if registered, sourceErr := a.evidence.GetSource(a.context(), value.SourceID); sourceErr == nil {
+			return a.openRegisteredSource(registered, page)
+		}
+	}
+	// Legacy guides predate registered sources. Their stored server-side locator
+	// remains a safe compatibility fallback; the frontend never supplies it.
+	return a.openRegisteredSource(evidence.Source{ID: value.SourceID, Kind: "pdf", Locator: value.SourceURI, Title: value.Title}, page)
+}
+
+func findCitation(value guide.Guide, citationID string) (guide.Citation, bool) {
+	for _, step := range value.Steps {
+		for _, citation := range step.Citations {
+			if citation.ID == citationID {
+				return citation, true
+			}
+		}
+	}
+	return guide.Citation{}, false
+}
+
+func (a *App) openRegisteredSource(source evidence.Source, page int) error {
+	if source.Kind != "pdf" {
+		return fmt.Errorf("source kind %q cannot be opened as a PDF", source.Kind)
+	}
+	path := filepath.Clean(source.Locator)
 	if path == "." || !filepath.IsAbs(path) {
-		return fmt.Errorf("source path must be absolute")
+		return fmt.Errorf("registered source path is invalid")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("open source file: %w", err)

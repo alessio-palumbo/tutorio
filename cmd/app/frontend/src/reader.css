@@ -42,3 +42,13 @@
 .deep-dive p { line-height: 1.7; }
 .deep-dive section { margin: 20px 0 0; }
 @media(max-width:650px){.guide-section-head{display:grid}.section-actions{width:100%}.section-actions button{flex:1}}
+.evidence-panel { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: rgba(31, 37, 32, .34); }
+.evidence-card { width: min(540px, 94vw); height: 100%; overflow: auto; padding: 34px; background: #faf8f2; box-shadow: -16px 0 40px rgba(31, 37, 32, .18); }
+.evidence-close { float: right; }
+.evidence-card h2 { clear: both; margin: 28px 0 4px; font: 30px Georgia, serif; }
+.evidence-location { margin-top: 7px; color: #59705b; font-weight: 700; }
+.evidence-context { display: grid; gap: 14px; margin: 28px 0; color: #686b66; line-height: 1.65; }
+.evidence-context p { margin: 0; }
+.evidence-context mark { display: block; padding: 18px; border-left: 4px solid #e6a642; background: #fff4dc; color: #20231f; }
+.evidence-card > button:last-child { padding: 12px 18px; }
+.evidence-links button { border: 1px solid #b9c7b8; }

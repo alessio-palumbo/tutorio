@@ -50,3 +50,15 @@ func TestEvidenceMigrationIsRecorded(t *testing.T) {
 		t.Fatalf("migration record: count=%d err=%v", count, err)
 	}
 }
+
+func TestEvidenceRepositoryReportsMissingEvidence(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, filepath.Join(t.TempDir(), "missing-evidence.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = NewEvidenceRepository(db).GetEvidence(ctx, "not-present"); err == nil {
+		t.Fatal("expected missing evidence to return an error")
+	}
+}
