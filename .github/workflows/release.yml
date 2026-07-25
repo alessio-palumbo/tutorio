@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            artifact: tutorio-macos
+            archive: tutorio-macos.zip
+          - name: Windows
+            os: windows-latest
+            artifact: tutorio-windows
+            archive: tutorio-windows.zip
+          - name: Linux
+            os: ubuntu-22.04
+            artifact: tutorio-linux
+            archive: tutorio-linux.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: cmd/app/frontend/package-lock.json
+
+      - name: Install Linux Wails dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Install frontend dependencies
+        working-directory: cmd/app/frontend
+        run: npm ci
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Build frontend
+        working-directory: cmd/app/frontend
+        run: npm run build
+
+      - name: Test Go
+        run: go test ./...
+
+      - name: Build Wails app
+        run: wails build -clean
+
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release
+          ditto -c -k --keepParent build/bin/tutorio.app release/${{ matrix.archive }}
+
+      - name: Package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path build/bin/* -DestinationPath release/${{ matrix.archive }}
+
+      - name: Package Linux app
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release
+          tar -czf release/${{ matrix.archive }} -C build/bin .
+
+      - name: Upload packaged build
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-22.04
+    needs: build
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Collect release files
+        run: |
+          mv artifacts/tutorio-macos/tutorio-macos.zip .
+          mv artifacts/tutorio-windows/tutorio-windows.zip .
+          mv artifacts/tutorio-linux/tutorio-linux.tar.gz .
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            tutorio-macos.zip
+            tutorio-windows.zip
+            tutorio-linux.tar.gz

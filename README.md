@@ -4,6 +4,27 @@ Tutorio is a local-first desktop application that reconstructs long-form tutoria
 
 Everything runs on the user's machine. There are no cloud services, accounts, or authentication.
 
+## Download
+
+Prebuilt macOS, Windows, and Linux artifacts are published on the [GitHub Releases page](https://github.com/alessio-palumbo/tutorio/releases).
+
+To try Tutorio:
+
+1. Open the latest release.
+2. Download the artifact for your platform.
+3. Extract the archive.
+4. Run `tutorio`.
+
+### macOS quarantine
+
+macOS builds are self-signed and are not notarized yet. After extracting the release archive, macOS may block the app. Remove the quarantine attribute before opening it:
+
+```sh
+xattr -dr com.apple.quarantine tutorio.app
+```
+
+Run the command from the folder containing `tutorio.app`, or replace `tutorio.app` with its full path.
+
 ## Current foundation
 
 This repository provides a buildable Wails application and the architectural spine for the MVP:
@@ -200,6 +221,17 @@ go test -tags=integration ./internal/integration -run TestCompileYouTube -v -cou
 ```
 
 The test uses a temporary SQLite database and does not add its output to the desktop library.
+
+## Release builds
+
+The release workflow builds macOS, Windows, and Linux artifacts from tags matching `v*` and publishes them to a GitHub Release.
+
+Current release limitations:
+
+- macOS notarization is not configured.
+- Windows signing is not configured.
+- Linux packaging contains the Wails build output rather than a distribution-specific package.
+- Runtime tools such as Ollama, `yt-dlp`, and Poppler are not bundled.
 
 ## Deliberate limitations
 
