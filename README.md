@@ -152,13 +152,14 @@ Tutorio resolves configuration in this order:
 
 1. The path in `TUTORIO_CONFIG_PATH`, when set.
 2. `config.yaml` in the current working directory (convenient for `wails dev`).
-3. The OS user config directory (`tutorio/config.yaml`).
+3. The platform user config directory:
+   - macOS: `~/Library/Application Support/tutorio/config.yaml`
+   - Linux: `$XDG_CONFIG_HOME/tutorio/config.yaml`, or `~/.config/tutorio/config.yaml`
+   - Windows: `%AppData%\tutorio\config.yaml`
 
-If none exists, local defaults are used. Copy `config.example.yaml` to `config.yaml` for development. The startup log reports the selected path and Ollama model. The default database is placed under the OS user config directory unless `database.path` overrides it.
+If none exists, local defaults are used. Copy `config.example.yaml` to `config.yaml` in the repository root for `wails dev`, or place it at the platform path above for an installed application. The startup log reports the selected path and Ollama model.
 
 ```yaml
-database:
-  path: ./data/tutorio.db
 ollama:
   base_url: http://127.0.0.1:11434
   model: qwen3:8b
@@ -172,7 +173,32 @@ processing:
   segment_characters: 12000
 ```
 
+The database path can be overridden when needed:
+
+```yaml
+database:
+  path: /absolute/path/to/tutorio.db
+```
+
+Prefer an absolute path for this override. Relative paths are resolved from the application's current working directory and can therefore select a different database depending on how Tutorio is launched.
+
 `segment_characters` is a conservative character budget, not a tokenizer. A later model-aware segmenter can replace it without changing the pipeline.
+
+## Local data and upgrades
+
+Tutorio stores its SQLite library outside the executable or application bundle. Replacing Tutorio with a newer build therefore preserves generated guides, jobs, source chunks, citations, and stored text evidence. On startup, the application opens the existing database and applies any required embedded migrations.
+
+The default database is:
+
+- macOS: `~/Library/Application Support/tutorio/tutorio.db`
+- Linux: `$XDG_CONFIG_HOME/tutorio/tutorio.db`, or `~/.config/tutorio/tutorio.db`
+- Windows: `%AppData%\tutorio\tutorio.db`
+
+This platform-native location is intentional. It follows operating-system conventions and is preferable to creating a hidden `$HOME/.tutorio` directory.
+
+Imported files are not copied into the database. The generated guide and extracted text evidence remain available if an original PDF is moved or deleted, but opening the full PDF or rendering its page preview requires the file to remain at its registered path.
+
+For a basic backup, close Tutorio and copy `tutorio.db`. Restoring that file to the same configured location restores the local library. A future in-app backup/export flow can package the database and registered source files more comprehensively.
 
 ### Choosing an Ollama model
 
