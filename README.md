@@ -47,9 +47,10 @@ flowchart TD
     D --> E[Generate structured JSON and source chunk IDs with Ollama]
     E --> F[Validate citations and resolve exact source evidence]
     F --> G[Merge sections, deduplicate, and build cheat sheet]
-    G --> H[Verify guide structure]
-    H --> I[(Save complete guide in SQLite)]
-    I --> J[Display in library and guide reader]
+    G --> H[Synthesize a concise guide overview]
+    H --> I[Verify guide structure]
+    I --> J[(Save complete guide in SQLite)]
+    J --> K[Display in library and guide reader]
 ```
 
 1. The UI persists a pending job and returns immediately; a single background worker runs queued jobs without competing Ollama requests.
@@ -60,7 +61,8 @@ flowchart TD
 6. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
 7. Model variations are normalized. For PDFs, returned chunk IDs are checked against the exact chunks supplied to that request, deduplicated, capped, and resolved to stored text. Unknown IDs are discarded and unsupported steps remain uncited.
 8. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
-9. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
+9. A small, non-blocking Ollama request synthesizes a guide-level overview from stored section titles and summaries. If it fails, the complete guide is still saved and the reader offers a retry.
+10. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
 
 Package responsibilities:
 
@@ -91,7 +93,7 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 ## Guide model
 
-The stored guide includes overview, prerequisites, final outcome, ordered steps, citations, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Registered sources, immutable source chunks, and evidence identities are normalized for reuse. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, timing, and local diagnostics. The base schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql), with numbered changes in [`internal/storage/sqlite/migrations`](internal/storage/sqlite/migrations).
+The stored guide includes a synthesized overview with readiness metadata, prerequisites, final outcome, ordered steps, citations, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Registered sources, immutable source chunks, and evidence identities are normalized for reuse. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, overview retry, timing, and local diagnostics. The base schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql), with numbered changes in [`internal/storage/sqlite/migrations`](internal/storage/sqlite/migrations).
 
 For a newly generated PDF guide, selecting a citation opens a lightweight evidence drawer containing the exact extracted chunk, its neighbouring chunks, the source title, physical PDF page, and a locally rendered page preview for figures, tables, and formatting. “Open full PDF” remains a secondary native-viewer fallback. Older saved guides with page-only references still show the source and physical page, but correctly show no excerpt; recompile the PDF to create durable evidence. See [the evidence architecture decision](docs/architecture/evidence.md).
 

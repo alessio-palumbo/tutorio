@@ -85,6 +85,9 @@ body.evidence-open { overflow: hidden; }
 .source-links h4 { margin: 0 0 8px; color: #59705b; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .lead p { margin: 0 0 18px; }
 .lead p:last-child { margin-bottom: 0; }
+.overview-action { display: flex; align-items: center; gap: 12px; margin: 20px 0 30px; }
+.overview-action button { flex: none; }
+.overview-action span { color: #686b66; font-size: 13px; }
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .visual-evidence { margin: 28px 0!important; }
 .visual-evidence h3 { margin: 0 0 12px; font: 22px Georgia,serif; }
