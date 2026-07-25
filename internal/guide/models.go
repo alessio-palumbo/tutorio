@@ -68,28 +68,44 @@ type DeepDive struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 type Guide struct {
-	ID                string            `json:"id"`
-	SourceType        string            `json:"source_type"`
-	SourceURI         string            `json:"source_uri"`
-	SourceID          string            `json:"source_id"`
-	Title             string            `json:"title"`
-	Overview          string            `json:"overview"`
-	Prerequisites     []string          `json:"prerequisites"`
-	FinalOutcome      string            `json:"final_outcome"`
-	Steps             []Step            `json:"steps"`
-	ImportantConcepts []string          `json:"important_concepts"`
-	Commands          []Command         `json:"commands"`
-	KeyboardShortcuts []Shortcut        `json:"keyboard_shortcuts"`
-	Warnings          []string          `json:"warnings"`
-	CommonMistakes    []string          `json:"common_mistakes"`
-	CheatSheet        []string          `json:"cheat_sheet"`
-	Appendix          []string          `json:"appendix"`
-	SourceTimestamps  []Timestamp       `json:"source_timestamps"`
-	SourceReferences  []SourceReference `json:"source_references,omitempty"`
-	DeepDives         []DeepDive        `json:"deep_dives,omitempty"`
-	Generation        Generation        `json:"generation"`
-	CreatedAt         time.Time         `json:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at"`
+	ID                 string             `json:"id"`
+	SourceType         string             `json:"source_type"`
+	SourceURI          string             `json:"source_uri"`
+	SourceID           string             `json:"source_id"`
+	Title              string             `json:"title"`
+	Overview           string             `json:"overview"`
+	OverviewGeneration OverviewGeneration `json:"overview_generation,omitempty"`
+	Prerequisites      []string           `json:"prerequisites"`
+	FinalOutcome       string             `json:"final_outcome"`
+	Steps              []Step             `json:"steps"`
+	ImportantConcepts  []string           `json:"important_concepts"`
+	Commands           []Command          `json:"commands"`
+	KeyboardShortcuts  []Shortcut         `json:"keyboard_shortcuts"`
+	Warnings           []string           `json:"warnings"`
+	CommonMistakes     []string           `json:"common_mistakes"`
+	CheatSheet         []string           `json:"cheat_sheet"`
+	Appendix           []string           `json:"appendix"`
+	SourceTimestamps   []Timestamp        `json:"source_timestamps"`
+	SourceReferences   []SourceReference  `json:"source_references,omitempty"`
+	DeepDives          []DeepDive         `json:"deep_dives,omitempty"`
+	Generation         Generation         `json:"generation"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
+}
+type OverviewStatus string
+
+const (
+	OverviewMissing OverviewStatus = "missing"
+	OverviewReady   OverviewStatus = "ready"
+	OverviewStale   OverviewStatus = "stale"
+	OverviewFailed  OverviewStatus = "failed"
+)
+
+type OverviewGeneration struct {
+	Status    OverviewStatus `json:"status,omitempty"`
+	Model     string         `json:"model,omitempty"`
+	Error     string         `json:"error,omitempty"`
+	UpdatedAt time.Time      `json:"updated_at,omitempty"`
 }
 type Generation struct {
 	JobID                string `json:"job_id,omitempty"`

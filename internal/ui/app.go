@@ -165,6 +165,9 @@ func (a *App) ListGuideSections(id string) ([]jobs.Segment, error) {
 func (a *App) RegenerateSection(id string, index int) (guide.Guide, error) {
 	return a.pipeline.RegenerateSection(a.context(), id, index)
 }
+func (a *App) GenerateOverview(id string) (guide.Guide, error) {
+	return a.pipeline.GenerateOverview(a.context(), id)
+}
 func (a *App) ConfirmRegenerateSection(id string, index int) (bool, error) {
 	value, err := a.guides.Get(a.context(), id)
 	if err != nil {

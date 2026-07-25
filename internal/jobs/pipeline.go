@@ -22,6 +22,7 @@ type Pipeline struct {
 	cleaner    transcript.Cleaner
 	segmenter  transcript.Segmenter
 	generator  guide.Generator
+	overview   guide.OverviewSynthesizer
 	expander   guide.Expander
 	evidence   evidence.Repository
 	verifier   guide.Verifier
@@ -40,6 +41,10 @@ func NewPipeline(s source.Resolver, c transcript.Cleaner, sg transcript.Segmente
 }
 func (p *Pipeline) WithExpander(expander guide.Expander) *Pipeline {
 	p.expander = expander
+	return p
+}
+func (p *Pipeline) WithOverviewSynthesizer(synthesizer guide.OverviewSynthesizer) *Pipeline {
+	p.overview = synthesizer
 	return p
 }
 func (p *Pipeline) WithEvidenceRepository(repository evidence.Repository) *Pipeline {
@@ -131,6 +136,16 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	generated.Generation.JobID = job.ID
 	if generated.Title == "" {
 		generated.Title = doc.Title
+	}
+	if p.overview != nil {
+		p.report(ctx, "overview", "Writing a concise guide overview…", 0, 1)
+		p.updateJob(ctx, &job, "overview", 0, 1)
+		storedSections, sectionsErr := p.store.Segments(ctx, job.ID)
+		if sectionsErr != nil {
+			p.logger.WarnContext(ctx, "load sections for overview", "error", sectionsErr)
+		} else {
+			p.synthesizeOverview(ctx, &generated, storedSections)
+		}
 	}
 	p.report(ctx, "verifying", "Verifying guide structure…", 0, 0)
 	if err = p.verifier.Verify(ctx, generated); err != nil {
@@ -271,6 +286,11 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	result.SourceURI = job.SourceURI
 	result.SourceID = sourceID
 	result.Generation = metadata
+	if p.overview != nil {
+		p.report(ctx, "overview", "Writing a concise guide overview…", 0, 1)
+		p.updateJob(ctx, &job, "overview", 0, 1)
+		p.synthesizeOverview(ctx, &result, sections)
+	}
 	if err = p.verifier.Verify(ctx, result); err != nil {
 		return guide.Guide{}, p.fail(ctx, &job, err)
 	}
@@ -359,6 +379,52 @@ func (p *Pipeline) SaveGuide(ctx context.Context, value guide.Guide) (guide.Guid
 	return p.repository.Save(ctx, value)
 }
 
+func (p *Pipeline) GenerateOverview(ctx context.Context, guideID string) (guide.Guide, error) {
+	if p.overview == nil {
+		return guide.Guide{}, fmt.Errorf("overview generation is not configured")
+	}
+	stored, err := p.repository.Get(ctx, guideID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	sections, err := p.Sections(ctx, guideID)
+	if err != nil {
+		return guide.Guide{}, err
+	}
+	p.report(ctx, "overview", "Writing a concise guide overview…", 0, 1)
+	if err = p.synthesizeOverview(ctx, &stored, sections); err != nil {
+		_, _ = p.repository.Save(ctx, stored)
+		return guide.Guide{}, err
+	}
+	if err = p.verifier.Verify(ctx, stored); err != nil {
+		return guide.Guide{}, err
+	}
+	saved, err := p.repository.Save(ctx, stored)
+	if err == nil {
+		p.report(ctx, "complete", "Guide overview saved.", 1, 1)
+	}
+	return saved, err
+}
+
+func (p *Pipeline) synthesizeOverview(ctx context.Context, value *guide.Guide, sections []Segment) error {
+	input := make([]guide.OverviewSection, 0, len(sections))
+	for _, section := range sections {
+		if section.Status != StatusCompleted || strings.TrimSpace(section.Guide.Overview) == "" {
+			continue
+		}
+		input = append(input, guide.OverviewSection{Title: section.Guide.Title, Overview: section.Guide.Overview})
+	}
+	result, err := p.overview.SynthesizeOverview(ctx, guide.OverviewRequest{Title: value.Title, FinalOutcome: value.FinalOutcome, Sections: input})
+	if err != nil {
+		value.OverviewGeneration = guide.OverviewGeneration{Status: guide.OverviewFailed, Error: err.Error(), UpdatedAt: time.Now().UTC()}
+		p.logger.WarnContext(ctx, "guide overview synthesis failed", "guide_id", value.ID, "error", err)
+		return err
+	}
+	value.Overview = result.Text
+	value.OverviewGeneration = guide.OverviewGeneration{Status: guide.OverviewReady, Model: result.Model, UpdatedAt: time.Now().UTC()}
+	return nil
+}
+
 func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectionIndex int) (guide.Guide, error) {
 	stored, err := p.repository.Get(ctx, guideID)
 	if err != nil {
@@ -413,6 +479,11 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	rebuilt.CreatedAt = stored.CreatedAt
 	rebuilt.Generation = metadata
 	rebuilt.DeepDives = stored.DeepDives
+	rebuilt.Overview = stored.Overview
+	rebuilt.OverviewGeneration = stored.OverviewGeneration
+	if rebuilt.OverviewGeneration.Status == guide.OverviewReady {
+		rebuilt.OverviewGeneration.Status = guide.OverviewStale
+	}
 	if err = p.verifier.Verify(ctx, rebuilt); err != nil {
 		return guide.Guide{}, err
 	}

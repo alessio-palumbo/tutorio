@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -22,6 +23,15 @@ type fakeGenerator struct{}
 
 func (fakeGenerator) Generate(_ context.Context, r guide.GenerateRequest) (guide.Guide, error) {
 	return guide.Guide{Title: r.Title, Overview: "A guide", FinalOutcome: "Done", Steps: []guide.Step{{Number: 1, Title: "Act", Explanation: "Do it"}}}, nil
+}
+
+type fakeOverviewSynthesizer struct {
+	result guide.OverviewResult
+	err    error
+}
+
+func (f fakeOverviewSynthesizer) SynthesizeOverview(context.Context, guide.OverviewRequest) (guide.OverviewResult, error) {
+	return f.result, f.err
 }
 
 type memoryRepository struct{ saved guide.Guide }
@@ -103,5 +113,38 @@ func TestSectionSafeStepsPreservesEditsOutsideRegeneratedSection(t *testing.T) {
 	}
 	if got[1].Title != "New generated title" || got[1].Number != 2 {
 		t.Fatalf("regenerated section was not replaced: %#v", got)
+	}
+}
+
+func TestOverviewSynthesisUpdatesStateWithoutSourceText(t *testing.T) {
+	pipeline := &Pipeline{
+		overview: fakeOverviewSynthesizer{result: guide.OverviewResult{Text: "A concise guide overview.", Model: "local-model"}},
+		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	value := guide.Guide{Title: "Lesson", Overview: "Section one. Section two.", FinalOutcome: "Done"}
+	sections := []Segment{
+		{Status: StatusCompleted, Guide: guide.Guide{Title: "One", Overview: "First section summary."}},
+		{Status: StatusCompleted, Guide: guide.Guide{Title: "Two", Overview: "Second section summary."}},
+	}
+	if err := pipeline.synthesizeOverview(context.Background(), &value, sections); err != nil {
+		t.Fatal(err)
+	}
+	if value.Overview != "A concise guide overview." || value.OverviewGeneration.Status != guide.OverviewReady || value.OverviewGeneration.Model != "local-model" {
+		t.Fatalf("unexpected overview state: %#v", value.OverviewGeneration)
+	}
+}
+
+func TestOverviewSynthesisFailurePreservesMergedGuide(t *testing.T) {
+	pipeline := &Pipeline{
+		overview: fakeOverviewSynthesizer{err: errors.New("model unavailable")},
+		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	value := guide.Guide{Title: "Lesson", Overview: "Existing merged summaries.", FinalOutcome: "Done"}
+	err := pipeline.synthesizeOverview(context.Background(), &value, []Segment{{Status: StatusCompleted, Guide: guide.Guide{Title: "One", Overview: "Summary"}}})
+	if err == nil {
+		t.Fatal("expected synthesis failure")
+	}
+	if value.Overview != "Existing merged summaries." || value.OverviewGeneration.Status != guide.OverviewFailed {
+		t.Fatalf("failed synthesis damaged guide: %#v", value)
 	}
 }
