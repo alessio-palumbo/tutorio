@@ -13,6 +13,7 @@ The roadmap deliberately grows capabilities by adding adapters and use cases aro
 - Background queue with cancellation, persisted sections, targeted retry, and automatic restart recovery.
 - Active-section diagnostics, visible source sections, and persisted source-grounded deep dives.
 - Native TXT/SRT/VTT/PDF selection, source-neutral references, and page-aware text PDF ingestion.
+- Durable PDF source chunks, validated multi-evidence citations, and a lightweight evidence drawer with legacy page-reference support.
 
 Exit criterion: all packages and a production Wails bundle build locally.
 
@@ -20,7 +21,7 @@ Exit criterion: all packages and a production Wails bundle build locally.
 
 - Add native transcript-file selection and expand guide editing beyond individual steps where useful.
 - Evaluate an optional bounded synthesis pass to improve cohesion across the existing per-segment generation and deterministic merge flow.
-- Expand verbatim transcript evidence into semantic verification and user-visible quality diagnostics.
+- Expand exact PDF evidence and verbatim transcript evidence into semantic verification and user-visible quality diagnostics.
 - Add prerequisite health checks for yt-dlp, pdftotext, and Ollama.
 - Add editable prompt profiles and model discovery/health checks.
 - Detect yt-dlp/Ollama prerequisites and provide actionable setup errors.
@@ -50,6 +51,6 @@ Exit criterion: learning artifacts are reproducible, editable, and traceable to 
 
 ## Phase 4 — source ecosystem
 
-- Add PDF, blog/documentation, and permitted course-platform adapters.
+- Add blog/documentation and permitted course-platform adapters, and enrich the existing PDF adapter with figures and table evidence.
 - Add source capability metadata (text, timestamps, images, chapters) so the pipeline selects applicable stages.
 - Add plugin-style registration and versioned schema migrations when third-party extensions become necessary.

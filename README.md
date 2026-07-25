@@ -10,14 +10,14 @@ This repository provides a buildable Wails application and the architectural spi
 
 - YouTube subtitle retrieval through `yt-dlp`.
 - local `.txt`, `.srt`, and `.vtt` transcript ingestion.
-- local text-based PDF ingestion with page-aware citations through Poppler.
+- local text-based PDF ingestion with durable source chunks and page-aware evidence through Poppler.
 - transcript cleaning and cue-aware segmentation.
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
 - persistent per-section results with targeted retry after interruption.
 - active-section timing, slow-call indicators, and inspectable local model diagnostics.
-- verified transcript excerpts and clickable source timestamps.
+- verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
 - visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
 - SQLite storage and a Wails guide library/reader.
 
@@ -39,10 +39,10 @@ SQLite ───┘                    domain models  use-case rules
 ```mermaid
 flowchart TD
     A[YouTube URL or transcript file] --> B[Source adapter]
-    B --> C[Timestamped transcript]
+    B --> C[Timestamped transcript or page-aware source chunks]
     C --> D[Clean and split into bounded segments]
-    D --> E[Generate structured JSON for each segment with Ollama]
-    E --> F[Normalize model output and anchor timestamps]
+    D --> E[Generate structured JSON and source chunk IDs with Ollama]
+    E --> F[Validate citations and resolve exact source evidence]
     F --> G[Merge sections, deduplicate, and build cheat sheet]
     G --> H[Verify guide structure]
     H --> I[(Save complete guide in SQLite)]
@@ -51,11 +51,11 @@ flowchart TD
 
 1. The UI persists a pending job and returns immediately; a single background worker runs queued jobs without competing Ollama requests.
 2. The source registry selects the YouTube or local-file adapter.
-3. `yt-dlp` retrieves YouTube subtitles; TXT, SRT, and VTT files are parsed directly.
-4. Transcript text is cleaned while source timestamps are preserved.
+3. `yt-dlp` retrieves YouTube subtitles; TXT, SRT, and VTT files are parsed directly; Poppler extracts text PDFs by physical page.
+4. Transcript text is cleaned while timestamps are preserved. PDF text is persisted as immutable, content-addressed source chunks before generation.
 5. Oversized transcripts and cues are divided into model-sized segments.
 6. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
-7. Model variations are normalized, timestamps are anchored to the original timeline, and segment guides are merged.
+7. Model variations are normalized. For PDFs, returned chunk IDs are checked against the exact chunks supplied to that request, deduplicated, capped, and resolved to stored text. Unknown IDs are discarded and unsupported steps remain uncited.
 8. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
 9. The result is verified, stored as structured JSON in SQLite, and loaded by the library reader after restart.
 
@@ -71,6 +71,7 @@ Package responsibilities:
 | `internal/transcript` | Source-neutral parsing, cleaning, segmentation |
 | `internal/llm` | Model-provider contract and Ollama HTTP adapter |
 | `internal/guide` | Guide domain, generation and verification contracts |
+| `internal/evidence` | Registered sources, immutable source chunks, evidence resolution |
 | `internal/jobs` | Background queue, pipeline use case, recovery, and stage orchestration |
 | `internal/storage/sqlite` | SQLite connection, schema, guide repository |
 | `internal/config` | YAML configuration and local defaults |
@@ -87,7 +88,9 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 ## Guide model
 
-The stored guide includes overview, prerequisites, final outcome, ordered steps, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, timing, and local diagnostics. The schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql).
+The stored guide includes overview, prerequisites, final outcome, ordered steps, citations, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Registered sources, immutable source chunks, and evidence identities are normalized for reuse. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, timing, and local diagnostics. The base schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql), with numbered changes in [`internal/storage/sqlite/migrations`](internal/storage/sqlite/migrations).
+
+For a newly generated PDF guide, selecting a citation opens a lightweight evidence drawer containing the exact extracted chunk, its neighbouring chunks, the source title, and the physical PDF page. “Open full PDF” remains a secondary native-viewer fallback. Older saved guides with page-only references still show the source and physical page, but correctly show no excerpt until regenerated. See [the evidence architecture decision](docs/architecture/evidence.md).
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
@@ -196,7 +199,7 @@ The test uses a temporary SQLite database and does not add its output to the des
 
 - Long transcripts are generated section-by-section and merged deterministically. A later synthesis pass may improve cross-section narrative cohesion without sacrificing provenance.
 - Deep dives deliberately use only the saved source transcript and current section steps; optional cited web research is not implemented.
-- Verification checks structure, not yet factual grounding against transcript evidence.
+- PDF step citations are grounded to exact extracted chunks. Broader claim-level semantic verification and support classification remain future work.
 - The queue deliberately runs one compilation at a time to avoid concurrent local-model memory pressure.
 - The backend supports transcript-file import, while native file selection and its frontend control are Phase 1 UI work.
 - Audio transcription, screenshots, vision, playlists, PDF export, flashcards, quizzes, and progressive learning are architecture extension points only.
