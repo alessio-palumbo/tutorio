@@ -20,4 +20,4 @@ Model-returned chunk IDs are treated as untrusted input. The generator accepts o
 
 ## Compatibility
 
-Existing `SourceReference`, timestamp, and `SourceExcerpt` fields remain readable. Older page-only references open an evidence panel with source and page metadata but no excerpt. Regenerating a section can add durable evidence without rewriting unrelated guide content or manual edits.
+Existing `SourceReference`, timestamp, and `SourceExcerpt` fields remain readable. Older page-only references open an evidence panel with source and page metadata but no excerpt. Because their persisted source sections predate durable chunks, the PDF must be recompiled to add exact evidence; the original saved guide remains readable.
