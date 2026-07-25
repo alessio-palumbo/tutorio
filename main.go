@@ -23,12 +23,16 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 // Wails v2 requires the application entrypoint at the project root.
 //
 //go:embed all:cmd/app/frontend/dist
 var assets embed.FS
+
+//go:embed build/appicon.png
+var appIcon []byte
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -70,6 +74,7 @@ func main() {
 		Title: "tutorio", Width: 1200, Height: 800,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 246, G: 244, B: 238, A: 1},
+		Mac:              &mac.Options{About: &mac.AboutInfo{Title: "tutorio", Icon: appIcon}},
 		OnStartup:        app.Startup,
 		OnShutdown:       app.Shutdown,
 		Bind:             []interface{}{app},
