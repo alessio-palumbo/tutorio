@@ -16,19 +16,35 @@ type SourceReference struct {
 	PageEnd      int     `json:"page_end,omitempty"`
 	Label        string  `json:"label,omitempty"`
 }
+type SupportKind string
+
+const (
+	SupportDirect      SupportKind = "direct"
+	SupportInferred    SupportKind = "inferred"
+	SupportUnsupported SupportKind = "unsupported"
+)
+
+type Citation struct {
+	ID         string      `json:"id"`
+	EvidenceID string      `json:"evidence_id"`
+	Support    SupportKind `json:"support"`
+	Label      string      `json:"label,omitempty"`
+}
 type Step struct {
-	ID            string            `json:"id,omitempty"`
-	Number        int               `json:"number"`
-	SourceSegment int               `json:"source_segment"`
-	UserEdited    bool              `json:"user_edited,omitempty"`
-	Title         string            `json:"title"`
-	Explanation   string            `json:"explanation"`
-	Actions       []string          `json:"actions"`
-	Commands      []string          `json:"commands,omitempty"`
-	Warnings      []string          `json:"warnings,omitempty"`
-	Timestamps    []Timestamp       `json:"timestamps,omitempty"`
-	References    []SourceReference `json:"references,omitempty"`
-	SourceExcerpt string            `json:"source_excerpt,omitempty"`
+	ID               string            `json:"id,omitempty"`
+	Number           int               `json:"number"`
+	SourceSegment    int               `json:"source_segment"`
+	UserEdited       bool              `json:"user_edited,omitempty"`
+	Title            string            `json:"title"`
+	Explanation      string            `json:"explanation"`
+	Actions          []string          `json:"actions"`
+	Commands         []string          `json:"commands,omitempty"`
+	Warnings         []string          `json:"warnings,omitempty"`
+	Timestamps       []Timestamp       `json:"timestamps,omitempty"`
+	References       []SourceReference `json:"references,omitempty"`
+	Citations        []Citation        `json:"citations,omitempty"`
+	SourceExcerpt    string            `json:"source_excerpt,omitempty"`
+	EvidenceChunkIDs []string          `json:"evidence_chunk_ids,omitempty"`
 }
 type Shortcut struct {
 	Keys    string `json:"keys"`

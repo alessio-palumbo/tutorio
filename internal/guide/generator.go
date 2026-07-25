@@ -2,6 +2,7 @@ package guide
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/llm"
 	"github.com/alessio/tutorio/internal/transcript"
 )
@@ -94,19 +96,20 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 
 func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segment transcript.Segment, current, total int) (Guide, SectionResult, error) {
 	promptSegment := struct {
-		Index        int                  `json:"index"`
-		StartSeconds float64              `json:"start_seconds"`
-		EndSeconds   float64              `json:"end_seconds"`
-		Reference    transcript.Reference `json:"reference,omitempty"`
-		Text         string               `json:"text"`
-	}{Index: segment.Index, StartSeconds: segment.Start.Seconds(), EndSeconds: segment.End.Seconds(), Reference: segment.Reference, Text: segment.Text}
+		Index        int                      `json:"index"`
+		StartSeconds float64                  `json:"start_seconds"`
+		EndSeconds   float64                  `json:"end_seconds"`
+		Reference    transcript.Reference     `json:"reference,omitempty"`
+		Text         string                   `json:"text"`
+		Chunks       []transcript.SourceChunk `json:"source_chunks,omitempty"`
+	}{Index: segment.Index, StartSeconds: segment.Start.Seconds(), EndSeconds: segment.End.Seconds(), Reference: segment.Reference, Text: segment.Text, Chunks: segment.Chunks}
 	data, err := json.Marshal(promptSegment)
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
 	prompt := `Reconstruct this section of a tutorial as part of a practical manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and timestamps. Extract every keyboard shortcut mentioned and include concise command/shortcut references in the cheat_sheet. Do not invent information from sections you have not seen. The supplied start_seconds and end_seconds are absolute positions in the complete source; every timestamp you return must use that same absolute timeline and fall within this range. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not tutorial steps. Every step must include number, title, explanation, actions, commands, warnings, timestamps, and source_excerpt containing a short verbatim supporting excerpt from this transcript section. Timestamps use numeric start_seconds and end_seconds measured from the start of the complete video, plus label. Unknown arrays must be empty.`
 	if segment.Reference.Kind == "page" {
-		prompt = `Reconstruct this section of a document as part of a practical learning manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and terminology. Extract useful shortcuts and concise references in the cheat_sheet. Do not invent information from pages you have not seen. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not procedural steps. Every step must include number, title, explanation, actions, commands, warnings, an empty timestamps array, and source_excerpt containing a short verbatim supporting excerpt from this document section. Unknown arrays must be empty. Page references are assigned deterministically from the supplied page range after generation.`
+		prompt = `Reconstruct this section of a document as part of a practical learning manual, not a summary. Preserve sequence, explanations, exact commands, warnings, mistakes, and terminology. Extract useful shortcuts and concise references in the cheat_sheet. Do not invent information from pages you have not seen. Return only JSON matching these fields: title, overview, prerequisites, final_outcome, steps, important_concepts, commands, keyboard_shortcuts, warnings, common_mistakes, cheat_sheet, appendix, source_timestamps. prerequisites, important_concepts, warnings, common_mistakes, cheat_sheet, and appendix must be arrays of plain strings, never objects. Prerequisites are prior knowledge or required tools, not procedural steps. Every step must include number, title, explanation, actions, commands, warnings, an empty timestamps array, and evidence_chunk_ids. evidence_chunk_ids must be an array containing at most five IDs copied exactly from source_chunks that directly support the step. Never invent an ID and never cite a chunk merely because it is nearby. If no supplied chunk directly supports a step, return an empty evidence_chunk_ids array. Unknown arrays must be empty.`
 	}
 	response, err := g.provider.Complete(ctx, llm.Request{Format: "json", Temperature: 0, MaxTokens: g.maxTokens, ContextSize: g.contextSize, Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: fmt.Sprintf("Tutorial title: %s\nSection %d of %d:\n%s", title, current, total, data)}}})
 	if err != nil {
@@ -125,9 +128,53 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 		result.Steps[index].ID = fmt.Sprintf("step_%d_%d", segment.Index, index+1)
 		result.Steps[index].SourceSegment = segment.Index
 	}
+	resolveStepCitations(&result, segment)
 	anchorGuideSource(&result, segment)
-	validateSourceExcerpts(&result, segment.Text)
+	if len(segment.Chunks) == 0 {
+		validateSourceExcerpts(&result, segment.Text)
+	}
 	return result, metrics, nil
+}
+
+const maxCitationsPerStep = 5
+
+func resolveStepCitations(value *Guide, segment transcript.Segment) {
+	allowed := make(map[string]transcript.SourceChunk, len(segment.Chunks))
+	for _, chunk := range segment.Chunks {
+		allowed[chunk.ID] = chunk
+	}
+	for stepIndex := range value.Steps {
+		step := &value.Steps[stepIndex]
+		step.Citations = nil
+		step.References = nil
+		step.SourceExcerpt = ""
+		seen := make(map[string]struct{}, len(step.EvidenceChunkIDs))
+		for _, chunkID := range step.EvidenceChunkIDs {
+			chunk, ok := allowed[chunkID]
+			if !ok {
+				continue
+			}
+			if _, duplicate := seen[chunkID]; duplicate {
+				continue
+			}
+			seen[chunkID] = struct{}{}
+			evidenceID := evidence.EvidenceIDForChunk(chunkID)
+			citationHash := sha256.Sum256([]byte(step.ID + "\x00" + evidenceID))
+			label := chunk.Reference.Label
+			if label == "" && chunk.Reference.PageStart > 0 {
+				label = fmt.Sprintf("PDF page %d", chunk.Reference.PageStart)
+			}
+			step.Citations = append(step.Citations, Citation{ID: fmt.Sprintf("cit_%x", citationHash), EvidenceID: evidenceID, Support: SupportDirect, Label: label})
+			step.References = appendUniqueReferences(step.References, SourceReference{Kind: "page", PageStart: chunk.Reference.PageStart, PageEnd: chunk.Reference.PageEnd, Label: label})
+			if step.SourceExcerpt == "" {
+				step.SourceExcerpt = chunk.Text
+			}
+			if len(step.Citations) == maxCitationsPerStep {
+				break
+			}
+		}
+		step.EvidenceChunkIDs = nil
+	}
 }
 
 func validateSourceExcerpts(value *Guide, transcriptText string) {
@@ -144,9 +191,9 @@ func validateSourceExcerpts(value *Guide, transcriptText string) {
 func compactWhitespace(value string) string { return strings.Join(strings.Fields(value), " ") }
 
 var guideArrayFields = []string{"prerequisites", "steps", "important_concepts", "commands", "keyboard_shortcuts", "warnings", "common_mistakes", "cheat_sheet", "appendix", "source_timestamps"}
-var stepArrayFields = []string{"actions", "commands", "warnings", "timestamps"}
+var stepArrayFields = []string{"actions", "commands", "warnings", "timestamps", "evidence_chunk_ids"}
 var guideStringArrayFields = []string{"prerequisites", "important_concepts", "warnings", "common_mistakes", "cheat_sheet", "appendix"}
-var stepStringArrayFields = []string{"actions", "commands", "warnings"}
+var stepStringArrayFields = []string{"actions", "commands", "warnings", "evidence_chunk_ids"}
 
 func normalizeGuideJSON(content string) ([]byte, error) {
 	content = strings.TrimSpace(content)
@@ -480,14 +527,8 @@ func anchorGuideSource(value *Guide, segment transcript.Segment) {
 		if pageEnd < pageStart {
 			pageEnd = pageStart
 		}
-		span := pageEnd - pageStart + 1
 		for index := range value.Steps {
-			page := pageStart
-			if len(value.Steps) > 0 && span > 1 {
-				page += index * span / len(value.Steps)
-			}
 			value.Steps[index].Timestamps = nil
-			value.Steps[index].References = []SourceReference{{Kind: "page", PageStart: page, PageEnd: page, Label: value.Steps[index].Title}}
 		}
 		value.SourceTimestamps = nil
 		value.SourceReferences = []SourceReference{{Kind: "page", PageStart: pageStart, PageEnd: pageEnd, Label: segment.Reference.Label}}

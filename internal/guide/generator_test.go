@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/llm"
 	"github.com/alessio/tutorio/internal/transcript"
 )
@@ -81,14 +82,43 @@ func TestAnchorTimestampsAndPopulateCheatSheet(t *testing.T) {
 	}
 }
 
-func TestAnchorPageReferencesWithoutInventingTimestamps(t *testing.T) {
+func TestAnchorPageReferencesWithoutInventingStepEvidence(t *testing.T) {
 	value := Guide{Steps: []Step{{Title: "One"}, {Title: "Two"}}}
 	anchorGuideSource(&value, transcript.Segment{Index: 1, Reference: transcript.Reference{Kind: "page", PageStart: 10, PageEnd: 12}})
-	if len(value.Steps[0].Timestamps) != 0 || value.Steps[0].References[0].PageStart != 10 || value.Steps[1].References[0].PageStart != 11 {
+	if len(value.Steps[0].Timestamps) != 0 || len(value.Steps[0].References) != 0 || len(value.Steps[1].References) != 0 {
 		t.Fatalf("unexpected page references: %#v", value.Steps)
 	}
 	if len(value.SourceReferences) != 1 || value.SourceReferences[0].PageEnd != 12 {
 		t.Fatalf("unexpected source references: %#v", value.SourceReferences)
+	}
+}
+
+type evidenceProvider struct{}
+
+func (evidenceProvider) Complete(context.Context, llm.Request) (llm.Response, error) {
+	return llm.Response{Content: `{"title":"Lesson","overview":"Evidence","final_outcome":"Done","steps":[{"number":1,"title":"Supported","explanation":"Explain","actions":[],"commands":[],"warnings":[],"timestamps":[],"source_excerpt":"model text must not be trusted","evidence_chunk_ids":["chunk-a","chunk-a","unknown","chunk-b","chunk-c","chunk-d","chunk-e","chunk-f"]},{"number":2,"title":"Uncited","explanation":"Explain","actions":[],"commands":[],"warnings":[],"timestamps":[],"evidence_chunk_ids":["unknown"]}],"prerequisites":[],"important_concepts":[],"commands":[],"keyboard_shortcuts":[],"warnings":[],"common_mistakes":[],"cheat_sheet":[],"appendix":[],"source_timestamps":[]}`}, nil
+}
+
+func TestGeneratorResolvesOnlyAllowedExactEvidence(t *testing.T) {
+	chunks := make([]transcript.SourceChunk, 0, 6)
+	for index, id := range []string{"chunk-a", "chunk-b", "chunk-c", "chunk-d", "chunk-e", "chunk-f"} {
+		chunks = append(chunks, transcript.SourceChunk{ID: id, Kind: "text", Text: "Exact extracted text " + id, Sequence: index, Reference: transcript.Reference{Kind: "page", PageStart: 17 + index, PageEnd: 17 + index, Label: fmt.Sprintf("PDF page %d", 17+index)}})
+	}
+	got, err := NewLLMGenerator(evidenceProvider{}).Generate(context.Background(), GenerateRequest{Title: "Lesson", Segments: []transcript.Segment{{Index: 0, Text: "source", Reference: transcript.Reference{Kind: "page", PageStart: 17, PageEnd: 22}, Chunks: chunks}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Steps[0].Citations) != maxCitationsPerStep {
+		t.Fatalf("expected capped citations, got %#v", got.Steps[0].Citations)
+	}
+	if got.Steps[0].Citations[0].EvidenceID != evidence.EvidenceIDForChunk("chunk-a") || got.Steps[0].Citations[0].Support != SupportDirect {
+		t.Fatalf("unexpected citation: %#v", got.Steps[0].Citations[0])
+	}
+	if got.Steps[0].SourceExcerpt != "Exact extracted text chunk-a" || got.Steps[0].References[0].PageStart != 17 {
+		t.Fatalf("source text or page was not preserved: %#v", got.Steps[0])
+	}
+	if len(got.Steps[1].Citations) != 0 || got.Steps[1].SourceExcerpt != "" || len(got.Steps[1].References) != 0 {
+		t.Fatalf("unsupported step received invented evidence: %#v", got.Steps[1])
 	}
 }
 
