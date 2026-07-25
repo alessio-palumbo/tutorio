@@ -91,7 +91,7 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 The stored guide includes overview, prerequisites, final outcome, ordered steps, citations, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Registered sources, immutable source chunks, and evidence identities are normalized for reuse. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, timing, and local diagnostics. The base schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql), with numbered changes in [`internal/storage/sqlite/migrations`](internal/storage/sqlite/migrations).
 
-For a newly generated PDF guide, selecting a citation opens a lightweight evidence drawer containing the exact extracted chunk, its neighbouring chunks, the source title, and the physical PDF page. “Open full PDF” remains a secondary native-viewer fallback. Older saved guides with page-only references still show the source and physical page, but correctly show no excerpt; recompile the PDF to create durable evidence. See [the evidence architecture decision](docs/architecture/evidence.md).
+For a newly generated PDF guide, selecting a citation opens a lightweight evidence drawer containing the exact extracted chunk, its neighbouring chunks, the source title, physical PDF page, and a locally rendered page preview for figures, tables, and formatting. “Open full PDF” remains a secondary native-viewer fallback. Older saved guides with page-only references still show the source and physical page, but correctly show no excerpt; recompile the PDF to create durable evidence. See [the evidence architecture decision](docs/architecture/evidence.md).
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
@@ -101,7 +101,7 @@ For production evolution, add numbered embedded migrations rather than editing a
 - Wails v2 and its platform prerequisites.
 - Node.js/npm for the Vite frontend.
 - `yt-dlp` on `PATH` for YouTube sources.
-- Poppler's `pdftotext` on `PATH` for PDF sources.
+- Poppler's `pdftotext` and `pdftocairo` on `PATH` for PDF text and page previews.
 - Ollama running locally with the configured model, initially `qwen3:8b`.
 
 For example:
@@ -142,6 +142,7 @@ ollama:
 tools:
   yt_dlp_path: yt-dlp
   pdftotext_path: pdftotext
+  pdftocairo_path: pdftocairo
 processing:
   segment_characters: 12000
 ```

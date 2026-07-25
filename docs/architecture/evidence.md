@@ -2,6 +2,8 @@
 
 Tutorio treats evidence preview as the primary citation interaction. Opening the original source remains a secondary fallback for layout, figures, tables, and broader context.
 
+For PDF citations, the drawer may also request an on-demand raster preview of the cited physical page. The preview is rendered locally from the registered source after citation authorization. It supplements exact text evidence; it is not interpreted by a vision model and is not presented as a figure-specific citation.
+
 ## Model
 
 - A registered `Source` owns an opaque ID, local locator, title, kind, and content fingerprint. Locators never cross the frontend boundary.

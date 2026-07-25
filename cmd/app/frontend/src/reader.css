@@ -57,3 +57,6 @@
 .lead p { margin: 0 0 18px; }
 .lead p:last-child { margin-bottom: 0; }
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.visual-evidence { margin: 28px 0!important; }
+.visual-evidence h3 { margin: 0 0 12px; font: 22px Georgia,serif; }
+.visual-evidence img { display: block; width: 100%; height: auto; border: 1px solid #d8d4c8; border-radius: 8px; background: #fff; }
