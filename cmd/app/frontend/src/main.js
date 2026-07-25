@@ -18,6 +18,7 @@ app.innerHTML = `
     </section>
     <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Compilation queue</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
     <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="export-guide">Export Markdown</button></div><div id="guide-content"></div></section>
+    <button id="back-to-top" class="back-to-top" hidden aria-label="Back to top">↑ <span>Top</span></button>
     <aside id="evidence-panel" class="evidence-panel" hidden aria-label="Source evidence"><div class="evidence-card"><button class="quiet evidence-close" id="close-evidence" aria-label="Close evidence">Close</button><div id="evidence-content"></div></div></aside>
     <div id="image-lightbox" class="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="Zoomed source page"><div class="lightbox-toolbar"><button class="quiet" data-zoom-out aria-label="Zoom out">−</button><button class="quiet" data-zoom-reset>100%</button><button class="quiet" data-zoom-in aria-label="Zoom in">+</button><button class="quiet" data-zoom-close>Close</button></div><div class="lightbox-stage"><img alt=""></div></div>
   </main>`
@@ -27,6 +28,7 @@ const progress = document.querySelector('#progress')
 const guides = document.querySelector('#guides')
 const library = document.querySelector('#library')
 const reader = document.querySelector('#reader')
+const backToTop = document.querySelector('#back-to-top')
 const guideContent = document.querySelector('#guide-content')
 const evidencePanel = document.querySelector('#evidence-panel')
 const evidenceContent = document.querySelector('#evidence-content')
@@ -37,6 +39,7 @@ const jobs = document.querySelector('#jobs')
 const jobArea = document.querySelector('#job-area')
 let currentGuide = null
 let currentSections = []
+let libraryScrollY = 0
 const visualEvidenceCache = new Map()
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
 
@@ -103,6 +106,7 @@ async function saveStep(event,index) {
 }
 
 async function openGuide(id) {
+  libraryScrollY=window.scrollY
   try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); library.hidden = true; reader.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }) }
   catch (err) { message.textContent = String(err) }
 }
@@ -117,7 +121,9 @@ document.querySelector('#refresh').addEventListener('click', loadGuides)
 document.querySelector('#import-file').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const job=await backend().SelectAndQueueFile();if(job?.id){message.textContent='File compilation queued.';progress.hidden=false;progress.querySelector('div').style.width='4%';await loadJobs()}}catch(err){message.textContent=String(err)}finally{button.disabled=false}})
 guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){remove.disabled=true;try{const deleted=await backend().DeleteGuide(remove.dataset.deleteGuide);if(deleted){message.textContent='Guide deleted.';await loadGuides()}else{remove.disabled=false}}catch(err){message.textContent=String(err);remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
 jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const cancel=event.target.closest('[data-cancel-job]');const diagnostic=event.target.closest('[data-show-job]');const button=retry||cancel||diagnostic;if(!button)return;button.disabled=true;try{if(diagnostic){const sections=await backend().GetJobSections(diagnostic.dataset.showJob);const failed=[...sections].reverse().find(section=>section.error||section.raw_response);const card=diagnostic.closest('[data-job]');card.querySelector('.job-diagnostic')?.remove();card.insertAdjacentHTML('beforeend',`<details class="job-diagnostic" open><summary>Section ${(failed?.index??0)+1} model response</summary><p>${escapeHTML(failed?.error||'No section error was recorded.')}</p>${failed?.raw_response?`<pre><code>${escapeHTML(failed.raw_response)}</code></pre>`:'<p>No raw response was returned by the model.</p>'}</details>`);button.disabled=false;return}if(retry){await backend().RetryJob(retry.dataset.retryJob);message.textContent='Failed section requeued; completed sections will be reused.'}else{await backend().CancelJob(cancel.dataset.cancelJob);message.textContent='Compilation cancelled.'}await loadJobs()}catch(err){message.textContent=String(err);button.disabled=false}})
-document.querySelector('#back').addEventListener('click', () => { closeEvidence(); reader.hidden = true; library.hidden = false })
+function returnToLibrary(){closeEvidence();reader.hidden=true;library.hidden=false;backToTop.hidden=true;requestAnimationFrame(()=>window.scrollTo({top:libraryScrollY,behavior:'auto'}))}
+document.querySelector('#back').addEventListener('click',returnToLibrary)
+backToTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}))
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
 guideContent.addEventListener('click', event => { const link = event.target.closest('[data-source-url]'); if (link) window.runtime?.BrowserOpenURL?.(link.dataset.sourceUrl) })
 function closeEvidence(){closeImageZoom();evidencePanel.hidden=true;evidencePanel.dataset.citationId='';evidenceContent.innerHTML='';document.body.classList.remove('evidence-open')}
@@ -143,6 +149,14 @@ lightboxStage.addEventListener('pointermove',event=>{if(!lightboxDrag)return;lig
 lightboxStage.addEventListener('pointerup',()=>{lightboxDrag=null})
 lightboxStage.addEventListener('pointercancel',()=>{lightboxDrag=null})
 document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(!imageLightbox.hidden)closeImageZoom();else if(!evidencePanel.hidden)closeEvidence()})
+let lastWindowScroll=window.scrollY
+window.addEventListener('scroll',()=>{const current=window.scrollY;const scrollingUp=current<lastWindowScroll;backToTop.hidden=reader.hidden||current<500||!scrollingUp;lastWindowScroll=current},{passive:true})
+let edgeSwipe=null
+reader.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'&&event.clientX<=40&&evidencePanel.hidden)edgeSwipe={x:event.clientX,y:event.clientY,id:event.pointerId}})
+reader.addEventListener('pointerup',event=>{if(!edgeSwipe||event.pointerId!==edgeSwipe.id)return;const dx=event.clientX-edgeSwipe.x,dy=Math.abs(event.clientY-edgeSwipe.y);edgeSwipe=null;if(dx>=90&&dy<=60)returnToLibrary()})
+reader.addEventListener('pointercancel',()=>{edgeSwipe=null})
+let horizontalGesture=0,horizontalGestureTimer
+reader.addEventListener('wheel',event=>{if(!evidencePanel.hidden||Math.abs(event.deltaX)<=Math.abs(event.deltaY))return;horizontalGesture+=event.deltaX;clearTimeout(horizontalGestureTimer);horizontalGestureTimer=setTimeout(()=>{horizontalGesture=0},250);if(horizontalGesture<=-160){horizontalGesture=0;returnToLibrary()}},{passive:true})
 guideContent.addEventListener('click',event=>{const link=event.target.closest('[data-legacy-page]');if(!link)return;const page=Number(link.dataset.legacyPage)||1;showEvidencePanel(`<span class="eyebrow">SOURCE REFERENCE</span><h2>${escapeHTML(currentGuide.title)}</h2><p class="evidence-location">PDF page ${page}</p><p>This older guide has a page reference but no stored source excerpt. Recompile the PDF to create exact source evidence.</p><button data-open-legacy="${page}">Open full PDF</button><p class="muted">If your system viewer does not jump automatically, navigate to PDF page ${page}.</p>`)})
 evidenceContent.addEventListener('click',async event=>{const citation=event.target.closest('[data-open-citation]');const legacy=event.target.closest('[data-open-legacy]');if(!citation&&!legacy)return;const button=citation||legacy;button.disabled=true;try{if(citation)await backend().OpenCitationSource(currentGuide.id,citation.dataset.openCitation);else await backend().OpenGuideSource(currentGuide.id,Number(legacy.dataset.openLegacy)||1)}catch(err){message.textContent=String(err);button.disabled=false}})
 guideContent.addEventListener('click',event=>{const button=event.target.closest('[data-edit-step]');if(button)renderStepEditor(Number(button.dataset.editStep))})

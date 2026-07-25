@@ -70,3 +70,5 @@ body.evidence-open { overflow: hidden; }
 .lightbox-stage img { display: block; max-width: 92vw; max-height: 88vh; user-select: none; transform-origin: center; transition: transform .08s ease-out; }
 .lightbox-stage.can-pan { cursor: grab; }
 .lightbox-stage.can-pan:active { cursor: grabbing; }
+.back-to-top { position: fixed; right: 28px; bottom: 28px; z-index: 10; display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 16px; border: 1px solid #c88d31; border-radius: 99px; box-shadow: 0 8px 24px rgba(31,37,32,.2); }
+@media(max-width:650px){.back-to-top{right:16px;bottom:16px}.back-to-top span{display:none}}
