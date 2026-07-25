@@ -27,3 +27,57 @@
   color: #faf8f2;
   border-color: #718076;
 }
+
+.guide-card {
+  position: relative;
+  padding: 24px 48px 20px 20px;
+  cursor: pointer;
+}
+
+.guide-card:hover,
+.guide-card:has(.card-open-hit:focus-visible) {
+  border-color: #78907b;
+  outline: none;
+  box-shadow: 0 8px 22px #25362b14;
+  transform: translateY(-2px);
+}
+
+.guide-card .card-open-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  padding: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.guide-card .card-open-hit:focus {
+  outline: none;
+}
+
+.guide-card .card-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-color: transparent;
+  color: #8b2f2f;
+  font-size: 22px;
+  line-height: 1;
+  z-index: 2;
+}
+
+.guide-card .card-delete:hover,
+.guide-card .card-delete:focus-visible {
+  border-color: #d4aaaa;
+  background: #fff1f1;
+}
+
+.guide-card .card-delete span {
+  color: inherit;
+  font-size: inherit;
+  text-transform: none;
+}

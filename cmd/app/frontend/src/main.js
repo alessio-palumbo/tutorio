@@ -41,13 +41,17 @@ let currentGuide = null
 let currentSections = []
 let libraryScrollY = 0
 const visualEvidenceCache = new Map()
+const guidePositionKey=id=>`tutorio:guide-position:${id}`
+const readGuidePosition=id=>{try{return Math.max(0,Number(localStorage.getItem(guidePositionKey(id)))||0)}catch{return 0}}
+const saveGuidePosition=()=>{if(reader.hidden||!currentGuide?.id)return;try{localStorage.setItem(guidePositionKey(currentGuide.id),String(Math.round(window.scrollY)))}catch{}}
+const forgetGuidePosition=id=>{try{localStorage.removeItem(guidePositionKey(id))}catch{}}
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
 
 async function loadGuides() {
   if (!backend()) { guides.innerHTML = '<p class="muted">Run with <code>wails dev</code> to connect the library.</p>'; return }
   try {
     const items = await backend().ListGuides()
-    guides.innerHTML = items.length ? items.map(g => `<article class="guide-card"><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><div class="card-actions"><button data-guide-id="${escapeHTML(g.id)}">Open guide →</button><button class="quiet danger" data-delete-guide="${escapeHTML(g.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
+    guides.innerHTML = items.length ? items.map(g => `<article class="guide-card"><button class="card-open-hit" data-guide-id="${escapeHTML(g.id)}" aria-label="Open ${escapeHTML(g.title)}"></button><button class="quiet danger card-delete" data-delete-guide="${escapeHTML(g.id)}" title="Delete guide" aria-label="Delete ${escapeHTML(g.title)}"><span aria-hidden="true">×</span></button><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><strong>Open guide →</strong></article>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
     await loadJobs()
   } catch (err) { guides.innerHTML = `<p class="error">${escapeHTML(err)}</p>` }
 }
@@ -107,7 +111,7 @@ async function saveStep(event,index) {
 
 async function openGuide(id) {
   libraryScrollY=window.scrollY
-  try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); library.hidden = true; reader.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  try { currentGuide = await backend().GetGuide(id); currentSections = await backend().ListGuideSections(id); renderGuide(currentGuide); library.hidden = true; reader.hidden = false; const position=readGuidePosition(id);requestAnimationFrame(()=>{const maximum=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);window.scrollTo({top:Math.min(position,maximum),behavior:'auto'});lastWindowScroll=window.scrollY}) }
   catch (err) { message.textContent = String(err) }
 }
 
@@ -119,9 +123,9 @@ document.querySelector('#compile-form').addEventListener('submit', async event =
 })
 document.querySelector('#refresh').addEventListener('click', loadGuides)
 document.querySelector('#import-file').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const job=await backend().SelectAndQueueFile();if(job?.id){message.textContent='File compilation queued.';progress.hidden=false;progress.querySelector('div').style.width='4%';await loadJobs()}}catch(err){message.textContent=String(err)}finally{button.disabled=false}})
-guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){remove.disabled=true;try{const deleted=await backend().DeleteGuide(remove.dataset.deleteGuide);if(deleted){message.textContent='Guide deleted.';await loadGuides()}else{remove.disabled=false}}catch(err){message.textContent=String(err);remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
+guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){remove.disabled=true;try{const deleted=await backend().DeleteGuide(remove.dataset.deleteGuide);if(deleted){forgetGuidePosition(remove.dataset.deleteGuide);message.textContent='Guide deleted.';await loadGuides()}else{remove.disabled=false}}catch(err){message.textContent=String(err);remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
 jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const cancel=event.target.closest('[data-cancel-job]');const diagnostic=event.target.closest('[data-show-job]');const button=retry||cancel||diagnostic;if(!button)return;button.disabled=true;try{if(diagnostic){const sections=await backend().GetJobSections(diagnostic.dataset.showJob);const failed=[...sections].reverse().find(section=>section.error||section.raw_response);const card=diagnostic.closest('[data-job]');card.querySelector('.job-diagnostic')?.remove();card.insertAdjacentHTML('beforeend',`<details class="job-diagnostic" open><summary>Section ${(failed?.index??0)+1} model response</summary><p>${escapeHTML(failed?.error||'No section error was recorded.')}</p>${failed?.raw_response?`<pre><code>${escapeHTML(failed.raw_response)}</code></pre>`:'<p>No raw response was returned by the model.</p>'}</details>`);button.disabled=false;return}if(retry){await backend().RetryJob(retry.dataset.retryJob);message.textContent='Failed section requeued; completed sections will be reused.'}else{await backend().CancelJob(cancel.dataset.cancelJob);message.textContent='Compilation cancelled.'}await loadJobs()}catch(err){message.textContent=String(err);button.disabled=false}})
-function returnToLibrary(){closeEvidence();reader.hidden=true;library.hidden=false;backToTop.hidden=true;requestAnimationFrame(()=>window.scrollTo({top:libraryScrollY,behavior:'auto'}))}
+function returnToLibrary(){saveGuidePosition();closeEvidence();reader.hidden=true;library.hidden=false;backToTop.hidden=true;requestAnimationFrame(()=>window.scrollTo({top:libraryScrollY,behavior:'auto'}))}
 document.querySelector('#back').addEventListener('click',returnToLibrary)
 backToTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}))
 document.querySelector('#export-guide').addEventListener('click',async()=>{if(!currentGuide)return;try{const path=await backend().ExportMarkdown(currentGuide.id);if(path)message.textContent=`Exported to ${path}`}catch(err){message.textContent=String(err)}})
@@ -150,7 +154,9 @@ lightboxStage.addEventListener('pointerup',()=>{lightboxDrag=null})
 lightboxStage.addEventListener('pointercancel',()=>{lightboxDrag=null})
 document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(!imageLightbox.hidden)closeImageZoom();else if(!evidencePanel.hidden)closeEvidence()})
 let lastWindowScroll=window.scrollY
-window.addEventListener('scroll',()=>{const current=window.scrollY;const scrollingUp=current<lastWindowScroll;backToTop.hidden=reader.hidden||current<500||!scrollingUp;lastWindowScroll=current},{passive:true})
+let positionSaveTimer
+window.addEventListener('scroll',()=>{const current=window.scrollY;const scrollingUp=current<lastWindowScroll;backToTop.hidden=reader.hidden||current<500||!scrollingUp;lastWindowScroll=current;if(!reader.hidden){clearTimeout(positionSaveTimer);positionSaveTimer=setTimeout(saveGuidePosition,150)}},{passive:true})
+window.addEventListener('beforeunload',saveGuidePosition)
 let edgeSwipe=null
 reader.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'&&event.clientX<=40&&evidencePanel.hidden)edgeSwipe={x:event.clientX,y:event.clientY,id:event.pointerId}})
 reader.addEventListener('pointerup',event=>{if(!edgeSwipe||event.pointerId!==edgeSwipe.id)return;const dx=event.clientX-edgeSwipe.x,dy=Math.abs(event.clientY-edgeSwipe.y);edgeSwipe=null;if(dx>=90&&dy<=60)returnToLibrary()})
