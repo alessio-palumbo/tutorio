@@ -166,6 +166,12 @@ func (a *App) RetryJob(id string) (jobs.Job, error) {
 	}
 	return a.manager.Retry(a.context(), id)
 }
+func (a *App) PrioritizeJob(id string) (jobs.Job, error) {
+	if a.manager == nil {
+		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
+	}
+	return a.manager.Prioritize(a.context(), id)
+}
 func (a *App) CancelJob(id string) error {
 	if a.manager == nil {
 		return fmt.Errorf("background job manager is not configured")
