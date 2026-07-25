@@ -19,7 +19,7 @@ This repository provides a buildable Wails application and the architectural spi
 - persistent per-section results with targeted retry after interruption.
 - active-section timing, slow-call indicators, and inspectable local model diagnostics.
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
-- readable overview paragraphing, prerequisite deduplication, and locally bundled KaTeX formula rendering.
+- section-level overviews, prerequisite deduplication, and locally bundled KaTeX formula rendering.
 - visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
 - collapsible guide sections that double as a compact index, plus compact reference blocks for supporting material.
 - SQLite storage and a Wails guide library/reader.
