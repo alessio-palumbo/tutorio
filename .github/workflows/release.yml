@@ -75,6 +75,7 @@ jobs:
         run: |
           mkdir -p release/package
           cp -R build/bin/tutorio.app release/package/
+          cp -R docs release/package/
           cp README.md LICENSE release/package/
           ditto -c -k --sequesterRsrc release/package/ release/${{ matrix.archive }}
 
@@ -84,6 +85,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release/package | Out-Null
           Copy-Item -Path build/bin/* -Destination release/package -Recurse
+          Copy-Item -Path docs -Destination release/package -Recurse
           Copy-Item -Path README.md, LICENSE -Destination release/package
           Compress-Archive -Path release/package/* -DestinationPath release/${{ matrix.archive }}
 
@@ -92,6 +94,7 @@ jobs:
         run: |
           mkdir -p release/package
           cp -R build/bin/. release/package/
+          cp -R docs release/package/
           cp README.md LICENSE release/package/
           tar -czf release/${{ matrix.archive }} -C release/package .
 
