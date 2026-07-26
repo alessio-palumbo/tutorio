@@ -6,7 +6,7 @@ The roadmap deliberately grows capabilities by adding adapters and use cases aro
 
 - Clean package boundaries, dependency injection, structured logging, cancellation-aware interfaces.
 - YouTube and transcript-file source adapters.
-- TXT, SRT, and VTT parsing; cleaning; bounded segmentation.
+- TXT, SRT, and VTT parsing; cleaning; Unicode-aware bounded segmentation with YouTube chapter, PDF heading, and long-pause boundaries.
 - Ollama generate adapter and structured guide schema.
 - Structural verification and SQLite persistence.
 - Wails compile/library/reader shell with inline step editing and Markdown export.
@@ -52,5 +52,5 @@ Exit criterion: learning artifacts are reproducible, editable, and traceable to 
 ## Phase 4 — source ecosystem
 
 - Add blog/documentation and permitted course-platform adapters, and enrich the existing PDF adapter with figures and table evidence.
-- Add source capability metadata (text, timestamps, images, chapters) so the pipeline selects applicable stages.
+- Expand source capability metadata (text, timestamps, images, chapters) so the pipeline selects applicable enrichment stages.
 - Add plugin-style registration and versioned schema migrations when third-party extensions become necessary.

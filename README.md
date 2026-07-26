@@ -36,7 +36,7 @@ This repository provides a buildable Wails application and the architectural spi
 - YouTube subtitle retrieval through `yt-dlp`.
 - local `.txt`, `.srt`, and `.vtt` transcript ingestion.
 - local text-based PDF ingestion with durable source chunks and page-aware evidence through Poppler.
-- transcript cleaning and cue-aware segmentation.
+- transcript cleaning and source-aware, cue-preserving segmentation.
 - structured JSON generation through a local Ollama model.
 - structural verification before persistence.
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
@@ -82,8 +82,8 @@ flowchart TD
 2. The source registry selects the YouTube or local-file adapter.
 3. `yt-dlp` retrieves YouTube subtitles; TXT, SRT, and VTT files are parsed directly; Poppler extracts text PDFs by physical page.
 4. Transcript text is cleaned while timestamps are preserved. PDF text is persisted as immutable, content-addressed source chunks before generation.
-5. Oversized transcripts and cues are divided into model-sized segments.
-6. Ollama reconstructs each segment as structured guide content; live progress is sent to Wails.
+5. Tutorio prefers explicit YouTube chapters and conservative PDF heading boundaries, then uses long transcript pauses as a soft boundary when enough content has accumulated. The configured Unicode-character budget remains a hard maximum and fallback.
+6. Ollama reconstructs each segment as structured guide content and must return a concise title specific to that section; live progress is sent to Wails.
 7. Model variations are normalized. For PDFs, returned chunk IDs are checked against the exact chunks supplied to that request, deduplicated, capped, and resolved to stored text. Unknown IDs are discarded and unsupported steps remain uncited.
 8. Each completed section and its performance metadata are persisted so failed work can resume without repeating successful sections.
 9. A small, non-blocking Ollama request synthesizes a guide-level overview from stored section titles and summaries. If it fails, the complete guide is still saved and the reader offers a retry.
@@ -211,7 +211,7 @@ database:
 
 Prefer an absolute path for this override. Relative paths are resolved from the application's current working directory and can therefore select a different database depending on how Tutorio is launched.
 
-`segment_characters` is a conservative character budget, not a tokenizer. A later model-aware segmenter can replace it without changing the pipeline.
+`segment_characters` is a hard Unicode-character budget, not a tokenizer target. Explicit YouTube chapters may create shorter sections. PDF headings and long transcript pauses are used only after enough content has accumulated, which avoids turning every small heading or silence into a separate section. When no trustworthy structure exists, Tutorio falls back to cue boundaries near the configured limit. A future semantic segmenter can replace these heuristics without changing the pipeline.
 
 ## Local data and upgrades
 
