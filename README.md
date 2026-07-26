@@ -42,7 +42,7 @@ This repository provides a buildable Wails application and the architectural spi
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
 - interrupted-job-first recovery and user-controlled “Run first” preemption for pending compilations; completed sections and source identity are retained.
 - persistent per-section results with targeted retry after interruption.
-- active-section timing, slow-call indicators, inspectable local model diagnostics, and separate prompt/generation token rates for model speed comparisons.
+- active-section timing, slow-call indicators, inspectable local model diagnostics, source-neutral extracted-text metrics, and separate prompt/generation token rates for model speed comparisons.
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
 - section-level overviews, prerequisite deduplication, and locally bundled KaTeX formula rendering.
 - visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
@@ -142,10 +142,12 @@ Generation details describe model workload and speed, not guide quality:
 - **Tokens in/out** are Ollama's prompt and generated token counts. Input tokens include the extracted source plus Tutorio's repeated instructions, structured-output schema, timestamps, and source metadata; they are therefore a model-workload measure rather than the exact size of the original source.
 - **Prompt speed** is prompt tokens divided by Ollama's prompt-evaluation duration. Prompt processing is highly parallel and is normally much faster than output generation.
 - **Generation speed** is output tokens divided by Ollama's output-evaluation duration. Output is generated autoregressively, so each token depends on the preceding token.
+- **Source content** is the word and Unicode-character count of the cleaned text before it is sent to the model. It is independent of Ollama's tokenizer and does not include Tutorio's prompts.
+- **Source** records the extraction method plus a source-specific extent when available: transcript duration for timed media or the highest physical page containing extracted PDF text.
 
 The speed figures are weighted aggregates across all sections: total tokens divided by total corresponding evaluation time. They are useful for comparing inference speed on the same hardware and broadly similar workloads, but they do not measure completeness, accuracy, concision, or source fidelity. Older guides created before evaluation timing was stored omit these rates rather than estimate them.
 
-Raw file bytes are intentionally not shown as an ingestion metric. They are not comparable across PDFs, subtitles, videos, and future source types, and may include images or compression unrelated to extracted text. A future source-neutral extracted-text size could complement token counts without conflating file size with model workload.
+Raw file bytes are intentionally not shown as an ingestion metric. They are not comparable across PDFs, subtitles, videos, and future source types, and may include images or compression unrelated to extracted text. Extracted words and characters provide the source-neutral comparison instead. Word counts are whitespace-delimited and therefore less representative for languages that do not separate words with spaces; the Unicode-character count remains the more stable cross-language measure. Changing caption, transcription, OCR, or cleaning implementations can still change both counts, so the stored extraction method provides necessary context.
 
 ## Prerequisites
 

@@ -133,6 +133,7 @@ func (p *Pipeline) RunJob(ctx context.Context, job Job, request source.Request) 
 	generated.SourceType = request.Type
 	generated.SourceURI = request.URI
 	generated.SourceID = doc.SourceID
+	generated.SourceMetrics = sourceMetrics(request.Type, segments)
 	generated.Generation.JobID = job.ID
 	if generated.Title == "" {
 		generated.Title = doc.Title
@@ -299,6 +300,7 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	result.SourceType = job.SourceType
 	result.SourceURI = job.SourceURI
 	result.SourceID = sourceID
+	result.SourceMetrics = storedSourceMetrics(job.SourceType, sections)
 	result.Generation = metadata
 	if p.overview != nil {
 		p.report(ctx, "overview", "Writing a concise guide overview…", 0, 1)
@@ -504,6 +506,10 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	rebuilt.SourceType = stored.SourceType
 	rebuilt.SourceURI = stored.SourceURI
 	rebuilt.SourceID = stored.SourceID
+	rebuilt.SourceMetrics = stored.SourceMetrics
+	if rebuilt.SourceMetrics.Characters == 0 {
+		rebuilt.SourceMetrics = storedSourceMetrics(stored.SourceType, sections)
+	}
 	rebuilt.CreatedAt = stored.CreatedAt
 	rebuilt.Generation = metadata
 	rebuilt.DeepDives = stored.DeepDives

@@ -72,6 +72,7 @@ type Guide struct {
 	SourceType         string             `json:"source_type"`
 	SourceURI          string             `json:"source_uri"`
 	SourceID           string             `json:"source_id"`
+	SourceMetrics      SourceMetrics      `json:"source_metrics,omitempty"`
 	Title              string             `json:"title"`
 	Overview           string             `json:"overview"`
 	OverviewGeneration OverviewGeneration `json:"overview_generation,omitempty"`
@@ -92,6 +93,15 @@ type Guide struct {
 	CreatedAt          time.Time          `json:"created_at"`
 	UpdatedAt          time.Time          `json:"updated_at"`
 }
+
+type SourceMetrics struct {
+	ExtractionMethod string  `json:"extraction_method,omitempty"`
+	Characters       int     `json:"characters,omitempty"`
+	Words            int     `json:"words,omitempty"`
+	DurationSeconds  float64 `json:"duration_seconds,omitempty"`
+	PhysicalPages    int     `json:"physical_pages,omitempty"`
+}
+
 type OverviewStatus string
 
 const (

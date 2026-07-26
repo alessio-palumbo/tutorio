@@ -53,6 +53,9 @@ func TestPipelineRunsStages(t *testing.T) {
 	if got.Title != "Lesson" || repo.saved.SourceID != "source-1" {
 		t.Fatalf("unexpected guide: %#v", got)
 	}
+	if got.SourceMetrics.Words != 3 || got.SourceMetrics.Characters != 13 {
+		t.Fatalf("unexpected source metrics: %#v", got.SourceMetrics)
+	}
 }
 
 func TestActiveSectionAdvancesBeyondCompletedCount(t *testing.T) {
