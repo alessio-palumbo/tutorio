@@ -51,6 +51,35 @@ func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
 	}
 }
 
+func TestGeneratorReplacesRepeatedGuideTitleWithStructuralHint(t *testing.T) {
+	provider := &sequenceProvider{}
+	var sectionTitle string
+	_, err := NewLLMGenerator(provider).Generate(context.Background(), GenerateRequest{
+		Title:    "Lesson",
+		Segments: []transcript.Segment{{Index: 0, Text: "one", TitleHint: "Installing dependencies"}},
+		OnSegment: func(result SectionResult) {
+			sectionTitle = result.Guide.Title
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sectionTitle != "Installing dependencies" {
+		t.Fatalf("section title = %q", sectionTitle)
+	}
+}
+
+func TestRepeatedGuideTitleDetection(t *testing.T) {
+	for _, value := range []string{"Lesson", "Lesson — Part 2", "Lesson: Section 3"} {
+		if !repeatsGuideTitle(value, "Lesson") {
+			t.Fatalf("expected %q to repeat guide title", value)
+		}
+	}
+	if repeatsGuideTitle("Installing dependencies", "Lesson") {
+		t.Fatal("content-specific title was treated as repeated")
+	}
+}
+
 func TestNormalizeGuideJSONWrapsSingleObjects(t *testing.T) {
 	raw := `{"title":"Lesson","steps":{"number":1,"title":"Start","explanation":"Go","timestamps":12},"prerequisites":[{"title":"Install Go","explanation":"Version 1.25 or newer"}],"warnings":[{"warning":"Back up first","details":"The operation is destructive"}],"common_mistakes":[{"mistake":"Skipping tests","correction":"Run the suite"}],"appendix":[{}, {"title":"Reference","content":"Details"}],"cheat_sheet":[{}, {"Save":"Cmd+S","Tools":["B: Blade","A: Select"]}],"source_timestamps":[30,"00:01:00",{"start_seconds":"00:02:00","end_seconds":"not supplied","label":"Fallback end"}],"commands":["go test ./..."],"keyboard_shortcuts":["Cmd+S"]}`
 	normalized, err := normalizeGuideJSON(raw)
