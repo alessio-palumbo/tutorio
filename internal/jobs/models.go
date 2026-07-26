@@ -35,17 +35,19 @@ type Job struct {
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 type Segment struct {
-	JobID                string             `json:"job_id"`
-	Index                int                `json:"index"`
-	Transcript           transcript.Segment `json:"transcript"`
-	Guide                guide.Guide        `json:"guide"`
-	Status               Status             `json:"status"`
-	Model                string             `json:"model,omitempty"`
-	PromptTokens         int                `json:"prompt_tokens,omitempty"`
-	OutputTokens         int                `json:"output_tokens,omitempty"`
-	DurationMilliseconds int64              `json:"duration_milliseconds,omitempty"`
-	RawResponse          string             `json:"raw_response,omitempty"`
-	Error                string             `json:"error,omitempty"`
+	JobID                      string             `json:"job_id"`
+	Index                      int                `json:"index"`
+	Transcript                 transcript.Segment `json:"transcript"`
+	Guide                      guide.Guide        `json:"guide"`
+	Status                     Status             `json:"status"`
+	Model                      string             `json:"model,omitempty"`
+	PromptTokens               int                `json:"prompt_tokens,omitempty"`
+	OutputTokens               int                `json:"output_tokens,omitempty"`
+	DurationMilliseconds       int64              `json:"duration_milliseconds,omitempty"`
+	PromptDurationMilliseconds int64              `json:"prompt_duration_milliseconds,omitempty"`
+	OutputDurationMilliseconds int64              `json:"output_duration_milliseconds,omitempty"`
+	RawResponse                string             `json:"raw_response,omitempty"`
+	Error                      string             `json:"error,omitempty"`
 }
 
 type Store interface {

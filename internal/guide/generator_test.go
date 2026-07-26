@@ -16,7 +16,15 @@ type sequenceProvider struct{ calls int }
 
 func (p *sequenceProvider) Complete(context.Context, llm.Request) (llm.Response, error) {
 	p.calls++
-	return llm.Response{Content: fmt.Sprintf(`{"title":"Lesson","overview":"Part %d","final_outcome":"Done","steps":[{"number":1,"title":"Step %d","explanation":"Explain","actions":[],"commands":[],"warnings":[],"timestamps":[]}],"prerequisites":[],"important_concepts":[],"commands":[],"keyboard_shortcuts":[],"warnings":[],"common_mistakes":[],"cheat_sheet":[],"appendix":[],"source_timestamps":[]}`, p.calls, p.calls)}, nil
+	return llm.Response{
+		Content:             fmt.Sprintf(`{"title":"Lesson","overview":"Part %d","final_outcome":"Done","steps":[{"number":1,"title":"Step %d","explanation":"Explain","actions":[],"commands":[],"warnings":[],"timestamps":[]}],"prerequisites":[],"important_concepts":[],"commands":[],"keyboard_shortcuts":[],"warnings":[],"common_mistakes":[],"cheat_sheet":[],"appendix":[],"source_timestamps":[]}`, p.calls, p.calls),
+		Model:               "test-model",
+		PromptTokens:        100,
+		OutputTokens:        20,
+		DurationNanos:       int64(4 * time.Second),
+		PromptDurationNanos: int64(2 * time.Second),
+		OutputDurationNanos: int64(time.Second),
+	}, nil
 }
 
 func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
@@ -37,6 +45,9 @@ func TestGeneratorCompilesAndMergesSegmentsIndependently(t *testing.T) {
 	}
 	if progress != 2 {
 		t.Fatalf("got progress %d", progress)
+	}
+	if got.Generation.PromptTokens != 200 || got.Generation.OutputTokens != 40 || got.Generation.PromptDurationMilliseconds != 4000 || got.Generation.OutputDurationMilliseconds != 2000 {
+		t.Fatalf("unexpected generation metrics: %#v", got.Generation)
 	}
 }
 

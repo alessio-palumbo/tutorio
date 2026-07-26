@@ -253,6 +253,8 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 	_ = p.store.Update(ctx, job)
 	partials := make([]guide.Guide, 0, len(sections))
 	metadata := guide.Generation{JobID: job.ID, SegmentCount: len(sections)}
+	promptTimingComplete := true
+	outputTimingComplete := true
 	title := recoveredTitle(job, sections)
 	sourceID := recoveredSourceID(job, sections)
 	for index := range sections {
@@ -271,6 +273,8 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 			section.PromptTokens = generated.Generation.PromptTokens
 			section.OutputTokens = generated.Generation.OutputTokens
 			section.DurationMilliseconds = generated.Generation.DurationMilliseconds
+			section.PromptDurationMilliseconds = generated.Generation.PromptDurationMilliseconds
+			section.OutputDurationMilliseconds = generated.Generation.OutputDurationMilliseconds
 			if err = p.store.CompleteSegment(ctx, *section); err != nil {
 				return guide.Guide{}, p.fail(ctx, &job, err)
 			}
@@ -280,6 +284,16 @@ func (p *Pipeline) RetryJob(ctx context.Context, jobID string) (guide.Guide, err
 		metadata.PromptTokens += section.PromptTokens
 		metadata.OutputTokens += section.OutputTokens
 		metadata.DurationMilliseconds += section.DurationMilliseconds
+		metadata.PromptDurationMilliseconds += section.PromptDurationMilliseconds
+		metadata.OutputDurationMilliseconds += section.OutputDurationMilliseconds
+		promptTimingComplete = promptTimingComplete && (section.PromptTokens == 0 || section.PromptDurationMilliseconds > 0)
+		outputTimingComplete = outputTimingComplete && (section.OutputTokens == 0 || section.OutputDurationMilliseconds > 0)
+	}
+	if !promptTimingComplete {
+		metadata.PromptDurationMilliseconds = 0
+	}
+	if !outputTimingComplete {
+		metadata.OutputDurationMilliseconds = 0
 	}
 	result := guide.Merge(title, partials)
 	result.SourceType = job.SourceType
@@ -458,17 +472,31 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	sections[position].PromptTokens = replacement.Generation.PromptTokens
 	sections[position].OutputTokens = replacement.Generation.OutputTokens
 	sections[position].DurationMilliseconds = replacement.Generation.DurationMilliseconds
+	sections[position].PromptDurationMilliseconds = replacement.Generation.PromptDurationMilliseconds
+	sections[position].OutputDurationMilliseconds = replacement.Generation.OutputDurationMilliseconds
 	if err = p.store.CompleteSegment(ctx, sections[position]); err != nil {
 		return guide.Guide{}, err
 	}
 	partials := make([]guide.Guide, 0, len(sections))
 	metadata := guide.Generation{JobID: stored.Generation.JobID, SegmentCount: len(sections), ContextWindow: stored.Generation.ContextWindow, MaxOutputTokens: stored.Generation.MaxOutputTokens}
+	promptTimingComplete := true
+	outputTimingComplete := true
 	for _, section := range sections {
 		partials = append(partials, section.Guide)
 		metadata.Model = section.Model
 		metadata.PromptTokens += section.PromptTokens
 		metadata.OutputTokens += section.OutputTokens
 		metadata.DurationMilliseconds += section.DurationMilliseconds
+		metadata.PromptDurationMilliseconds += section.PromptDurationMilliseconds
+		metadata.OutputDurationMilliseconds += section.OutputDurationMilliseconds
+		promptTimingComplete = promptTimingComplete && (section.PromptTokens == 0 || section.PromptDurationMilliseconds > 0)
+		outputTimingComplete = outputTimingComplete && (section.OutputTokens == 0 || section.OutputDurationMilliseconds > 0)
+	}
+	if !promptTimingComplete {
+		metadata.PromptDurationMilliseconds = 0
+	}
+	if !outputTimingComplete {
+		metadata.OutputDurationMilliseconds = 0
 	}
 	rebuilt := guide.Merge(stored.Title, partials)
 	rebuilt.Steps = sectionSafeSteps(stored.Steps, sections, sectionIndex)
@@ -594,5 +622,19 @@ func sectionSafeSteps(saved []guide.Step, sections []Segment, regenerated int) [
 }
 
 func segmentResult(jobID string, result guide.SectionResult, status Status) Segment {
-	return Segment{JobID: jobID, Index: result.Index, Transcript: result.Segment, Guide: result.Guide, Status: status, Model: result.Model, PromptTokens: result.PromptTokens, OutputTokens: result.OutputTokens, DurationMilliseconds: result.DurationMilliseconds, RawResponse: result.RawResponse, Error: result.Error}
+	return Segment{
+		JobID:                      jobID,
+		Index:                      result.Index,
+		Transcript:                 result.Segment,
+		Guide:                      result.Guide,
+		Status:                     status,
+		Model:                      result.Model,
+		PromptTokens:               result.PromptTokens,
+		OutputTokens:               result.OutputTokens,
+		DurationMilliseconds:       result.DurationMilliseconds,
+		PromptDurationMilliseconds: result.PromptDurationMilliseconds,
+		OutputDurationMilliseconds: result.OutputDurationMilliseconds,
+		RawResponse:                result.RawResponse,
+		Error:                      result.Error,
+	}
 }

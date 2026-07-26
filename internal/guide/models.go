@@ -108,14 +108,16 @@ type OverviewGeneration struct {
 	UpdatedAt time.Time      `json:"updated_at,omitempty"`
 }
 type Generation struct {
-	JobID                string `json:"job_id,omitempty"`
-	Model                string `json:"model,omitempty"`
-	DurationMilliseconds int64  `json:"duration_milliseconds,omitempty"`
-	SegmentCount         int    `json:"segment_count,omitempty"`
-	PromptTokens         int    `json:"prompt_tokens,omitempty"`
-	OutputTokens         int    `json:"output_tokens,omitempty"`
-	ContextWindow        int    `json:"context_window,omitempty"`
-	MaxOutputTokens      int    `json:"max_output_tokens,omitempty"`
+	JobID                      string `json:"job_id,omitempty"`
+	Model                      string `json:"model,omitempty"`
+	DurationMilliseconds       int64  `json:"duration_milliseconds,omitempty"`
+	PromptDurationMilliseconds int64  `json:"prompt_duration_milliseconds,omitempty"`
+	OutputDurationMilliseconds int64  `json:"output_duration_milliseconds,omitempty"`
+	SegmentCount               int    `json:"segment_count,omitempty"`
+	PromptTokens               int    `json:"prompt_tokens,omitempty"`
+	OutputTokens               int    `json:"output_tokens,omitempty"`
+	ContextWindow              int    `json:"context_window,omitempty"`
+	MaxOutputTokens            int    `json:"max_output_tokens,omitempty"`
 }
 type Summary struct {
 	ID         string    `json:"id"`

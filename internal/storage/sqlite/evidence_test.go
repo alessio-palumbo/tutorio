@@ -52,6 +52,9 @@ func TestEvidenceMigrationIsRecorded(t *testing.T) {
 	if err = db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version=2`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("job metadata migration record: count=%d err=%v", count, err)
 	}
+	if err = db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version=3`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("evaluation duration migration record: count=%d err=%v", count, err)
+	}
 }
 
 func TestEvidenceRepositoryReportsMissingEvidence(t *testing.T) {

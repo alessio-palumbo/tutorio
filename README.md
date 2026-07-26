@@ -42,7 +42,7 @@ This repository provides a buildable Wails application and the architectural spi
 - a single-worker background compilation queue with cancellation and automatic restart recovery.
 - interrupted-job-first recovery and user-controlled “Run first” preemption for pending compilations; completed sections and source identity are retained.
 - persistent per-section results with targeted retry after interruption.
-- active-section timing, slow-call indicators, and inspectable local model diagnostics.
+- active-section timing, slow-call indicators, inspectable local model diagnostics, and separate prompt/generation token rates for model speed comparisons.
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
 - section-level overviews, prerequisite deduplication, and locally bundled KaTeX formula rendering.
 - visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.

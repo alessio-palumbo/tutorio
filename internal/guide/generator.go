@@ -26,15 +26,17 @@ type GenerateRequest struct {
 	OnFailure  func(result SectionResult)
 }
 type SectionResult struct {
-	Index                int
-	Segment              transcript.Segment
-	Guide                Guide
-	Model                string
-	PromptTokens         int
-	OutputTokens         int
-	DurationMilliseconds int64
-	RawResponse          string
-	Error                string
+	Index                      int
+	Segment                    transcript.Segment
+	Guide                      Guide
+	Model                      string
+	PromptTokens               int
+	OutputTokens               int
+	DurationMilliseconds       int64
+	PromptDurationMilliseconds int64
+	OutputDurationMilliseconds int64
+	RawResponse                string
+	Error                      string
 }
 type Generator interface {
 	Generate(ctx context.Context, request GenerateRequest) (Guide, error)
@@ -78,6 +80,8 @@ func (g *LLMGenerator) Generate(ctx context.Context, req GenerateRequest) (Guide
 		metadata.PromptTokens += metrics.PromptTokens
 		metadata.OutputTokens += metrics.OutputTokens
 		metadata.DurationMilliseconds += metrics.DurationMilliseconds
+		metadata.PromptDurationMilliseconds += metrics.PromptDurationMilliseconds
+		metadata.OutputDurationMilliseconds += metrics.OutputDurationMilliseconds
 		if req.OnSegment != nil {
 			metrics.Guide = partial
 			req.OnSegment(metrics)
@@ -115,7 +119,15 @@ func (g *LLMGenerator) generateSegment(ctx context.Context, title string, segmen
 	if err != nil {
 		return Guide{}, SectionResult{}, err
 	}
-	metrics := SectionResult{Model: response.Model, PromptTokens: response.PromptTokens, OutputTokens: response.OutputTokens, DurationMilliseconds: response.DurationNanos / int64(time.Millisecond), RawResponse: response.Content}
+	metrics := SectionResult{
+		Model:                      response.Model,
+		PromptTokens:               response.PromptTokens,
+		OutputTokens:               response.OutputTokens,
+		DurationMilliseconds:       response.DurationNanos / int64(time.Millisecond),
+		PromptDurationMilliseconds: response.PromptDurationNanos / int64(time.Millisecond),
+		OutputDurationMilliseconds: response.OutputDurationNanos / int64(time.Millisecond),
+		RawResponse:                response.Content,
+	}
 	var result Guide
 	normalized, err := normalizeGuideJSON(response.Content)
 	if err != nil {

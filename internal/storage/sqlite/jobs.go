@@ -47,7 +47,7 @@ func (s *JobStore) CompleteSegment(ctx context.Context, value jobs.Segment) erro
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO job_segments(job_id,segment_index,transcript_json,guide_json,status,model,prompt_tokens,output_tokens,duration_ms,raw_response,error) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,segment_index) DO UPDATE SET transcript_json=excluded.transcript_json,guide_json=excluded.guide_json,status=excluded.status,model=excluded.model,prompt_tokens=excluded.prompt_tokens,output_tokens=excluded.output_tokens,duration_ms=excluded.duration_ms,raw_response=excluded.raw_response,error=excluded.error`, value.JobID, value.Index, transcriptJSON, guideJSON, value.Status, value.Model, value.PromptTokens, value.OutputTokens, value.DurationMilliseconds, value.RawResponse, value.Error)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO job_segments(job_id,segment_index,transcript_json,guide_json,status,model,prompt_tokens,output_tokens,duration_ms,prompt_duration_ms,output_duration_ms,raw_response,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,segment_index) DO UPDATE SET transcript_json=excluded.transcript_json,guide_json=excluded.guide_json,status=excluded.status,model=excluded.model,prompt_tokens=excluded.prompt_tokens,output_tokens=excluded.output_tokens,duration_ms=excluded.duration_ms,prompt_duration_ms=excluded.prompt_duration_ms,output_duration_ms=excluded.output_duration_ms,raw_response=excluded.raw_response,error=excluded.error`, value.JobID, value.Index, transcriptJSON, guideJSON, value.Status, value.Model, value.PromptTokens, value.OutputTokens, value.DurationMilliseconds, value.PromptDurationMilliseconds, value.OutputDurationMilliseconds, value.RawResponse, value.Error)
 	return err
 }
 func (s *JobStore) RecordSegmentFailure(ctx context.Context, value jobs.Segment) error {
@@ -55,7 +55,7 @@ func (s *JobStore) RecordSegmentFailure(ctx context.Context, value jobs.Segment)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO job_segments(job_id,segment_index,transcript_json,status,model,prompt_tokens,output_tokens,duration_ms,raw_response,error) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,segment_index) DO UPDATE SET status=excluded.status,model=excluded.model,prompt_tokens=excluded.prompt_tokens,output_tokens=excluded.output_tokens,duration_ms=excluded.duration_ms,raw_response=excluded.raw_response,error=excluded.error`, value.JobID, value.Index, transcriptJSON, value.Status, value.Model, value.PromptTokens, value.OutputTokens, value.DurationMilliseconds, value.RawResponse, value.Error)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO job_segments(job_id,segment_index,transcript_json,status,model,prompt_tokens,output_tokens,duration_ms,prompt_duration_ms,output_duration_ms,raw_response,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(job_id,segment_index) DO UPDATE SET status=excluded.status,model=excluded.model,prompt_tokens=excluded.prompt_tokens,output_tokens=excluded.output_tokens,duration_ms=excluded.duration_ms,prompt_duration_ms=excluded.prompt_duration_ms,output_duration_ms=excluded.output_duration_ms,raw_response=excluded.raw_response,error=excluded.error`, value.JobID, value.Index, transcriptJSON, value.Status, value.Model, value.PromptTokens, value.OutputTokens, value.DurationMilliseconds, value.PromptDurationMilliseconds, value.OutputDurationMilliseconds, value.RawResponse, value.Error)
 	return err
 }
 func (s *JobStore) Get(ctx context.Context, id string) (jobs.Job, error) {
@@ -82,7 +82,7 @@ func (s *JobStore) List(ctx context.Context, limit int) ([]jobs.Job, error) {
 	return result, rows.Err()
 }
 func (s *JobStore) Segments(ctx context.Context, jobID string) ([]jobs.Segment, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT segment_index,transcript_json,guide_json,status,model,prompt_tokens,output_tokens,duration_ms,raw_response,error FROM job_segments WHERE job_id=? ORDER BY segment_index`, jobID)
+	rows, err := s.db.QueryContext(ctx, `SELECT segment_index,transcript_json,guide_json,status,model,prompt_tokens,output_tokens,duration_ms,prompt_duration_ms,output_duration_ms,raw_response,error FROM job_segments WHERE job_id=? ORDER BY segment_index`, jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (s *JobStore) Segments(ctx context.Context, jobID string) ([]jobs.Segment, 
 		var item jobs.Segment
 		var transcriptJSON []byte
 		var guideJSON []byte
-		if err := rows.Scan(&item.Index, &transcriptJSON, &guideJSON, &item.Status, &item.Model, &item.PromptTokens, &item.OutputTokens, &item.DurationMilliseconds, &item.RawResponse, &item.Error); err != nil {
+		if err := rows.Scan(&item.Index, &transcriptJSON, &guideJSON, &item.Status, &item.Model, &item.PromptTokens, &item.OutputTokens, &item.DurationMilliseconds, &item.PromptDurationMilliseconds, &item.OutputDurationMilliseconds, &item.RawResponse, &item.Error); err != nil {
 			return nil, err
 		}
 		item.JobID = jobID
