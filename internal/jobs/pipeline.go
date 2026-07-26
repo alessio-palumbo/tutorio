@@ -463,11 +463,12 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	if position < 0 {
 		return guide.Guide{}, fmt.Errorf("section %d not found", sectionIndex+1)
 	}
-	p.report(ctx, "generating", fmt.Sprintf("Regenerating section %d…", sectionIndex+1), 0, 1)
+	p.reportSectionRegeneration(ctx, guideID, sectionIndex, "generating", fmt.Sprintf("Generating replacement for section %d with Ollama…", sectionIndex+1), 0, 0)
 	replacement, err := p.generator.Generate(ctx, guide.GenerateRequest{Title: stored.Title, SourceType: stored.SourceType, SourceURI: stored.SourceURI, SourceID: stored.SourceID, Segments: []transcript.Segment{sections[position].Transcript}})
 	if err != nil {
 		return guide.Guide{}, fmt.Errorf("regenerate section %d: %w", sectionIndex+1, err)
 	}
+	p.reportSectionRegeneration(ctx, guideID, sectionIndex, "assembling", "Updating the guide with the regenerated section…", 0, 0)
 	sections[position].Guide = replacement
 	sections[position].Status = StatusCompleted
 	sections[position].Model = replacement.Generation.Model
@@ -518,14 +519,28 @@ func (p *Pipeline) RegenerateSection(ctx context.Context, guideID string, sectio
 	if rebuilt.OverviewGeneration.Status == guide.OverviewReady {
 		rebuilt.OverviewGeneration.Status = guide.OverviewStale
 	}
+	p.reportSectionRegeneration(ctx, guideID, sectionIndex, "verifying", "Verifying the updated guide…", 0, 0)
 	if err = p.verifier.Verify(ctx, rebuilt); err != nil {
 		return guide.Guide{}, err
 	}
+	p.reportSectionRegeneration(ctx, guideID, sectionIndex, "saving", "Saving the regenerated section…", 0, 0)
 	rebuilt, err = p.repository.Save(ctx, rebuilt)
 	if err == nil {
-		p.report(ctx, "complete", "Section regenerated and guide updated.", 1, 1)
+		p.reportSectionRegeneration(ctx, guideID, sectionIndex, "complete", "Section regenerated and guide updated.", 1, 1)
 	}
 	return rebuilt, err
+}
+
+func (p *Pipeline) reportSectionRegeneration(ctx context.Context, guideID string, sectionIndex int, stage, message string, current, total int) {
+	p.progress.Report(ctx, Progress{
+		Stage:        stage,
+		Message:      message,
+		Current:      current,
+		Total:        total,
+		Operation:    "section_regeneration",
+		GuideID:      guideID,
+		SectionIndex: sectionIndex,
+	})
 }
 
 func (p *Pipeline) DelveSection(ctx context.Context, guideID string, sectionIndex int) (guide.Guide, error) {

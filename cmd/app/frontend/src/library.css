@@ -28,6 +28,17 @@
   border-color: #718076;
 }
 
+.progress.indeterminate div {
+  width: 32%!important;
+  animation: progress-slide 1.25s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes progress-slide {
+  from { transform: translateX(-115%); }
+  to { transform: translateX(315%); }
+}
+
 .guide-card {
   display: flex;
   flex-direction: column;

@@ -30,6 +30,14 @@ type fakeOverviewSynthesizer struct {
 	err    error
 }
 
+type recordingProgress struct {
+	values []Progress
+}
+
+func (r *recordingProgress) Report(_ context.Context, value Progress) {
+	r.values = append(r.values, value)
+}
+
 func (f fakeOverviewSynthesizer) SynthesizeOverview(context.Context, guide.OverviewRequest) (guide.OverviewResult, error) {
 	return f.result, f.err
 }
@@ -64,6 +72,20 @@ func TestActiveSectionAdvancesBeyondCompletedCount(t *testing.T) {
 	}
 	if got := activeSection(12, 12); got != 12 {
 		t.Fatalf("completed job section = %d, want 12", got)
+	}
+}
+
+func TestSectionRegenerationProgressCarriesOperationIdentity(t *testing.T) {
+	reporter := &recordingProgress{}
+	pipeline := &Pipeline{progress: reporter}
+	pipeline.reportSectionRegeneration(context.Background(), "guide-1", 0, "generating", "Generating replacement…", 0, 0)
+
+	if len(reporter.values) != 1 {
+		t.Fatalf("got %d progress events", len(reporter.values))
+	}
+	got := reporter.values[0]
+	if got.Operation != "section_regeneration" || got.GuideID != "guide-1" || got.SectionIndex != 0 || got.Stage != "generating" {
+		t.Fatalf("unexpected progress identity: %#v", got)
 	}
 }
 
