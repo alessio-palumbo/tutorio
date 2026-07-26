@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alessio/tutorio/internal/config"
 	"github.com/alessio/tutorio/internal/exporter/markdown"
@@ -33,6 +34,8 @@ var assets embed.FS
 
 //go:embed build/appicon.png
 var appIcon []byte
+
+var version = "0.1.0"
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -71,15 +74,31 @@ func main() {
 		WithVisualProvider(pdf.NewPageRenderer(cfg.Tools.PDFToCairoPath, pdf.OSCommandRunner{}))
 
 	err = wails.Run(&options.App{
-		Title: "tutorio", Width: 1200, Height: 800,
+		Title: appTitle(), Width: 1200, Height: 800,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 246, G: 244, B: 238, A: 1},
-		Mac:              &mac.Options{About: &mac.AboutInfo{Title: "tutorio", Icon: appIcon}},
-		OnStartup:        app.Startup,
-		OnShutdown:       app.Shutdown,
-		Bind:             []interface{}{app},
+		Mac: &mac.Options{About: &mac.AboutInfo{
+			Title:   "tutorio",
+			Message: "Version " + appVersion(),
+			Icon:    appIcon,
+		}},
+		OnStartup:  app.Startup,
+		OnShutdown: app.Shutdown,
+		Bind:       []interface{}{app},
 	})
 	if err != nil {
 		logger.Error("run desktop application", "error", err)
 	}
+}
+
+func appVersion() string {
+	value := strings.TrimSpace(strings.TrimPrefix(version, "v"))
+	if value == "" {
+		return "development"
+	}
+	return "v" + value
+}
+
+func appTitle() string {
+	return "tutorio " + appVersion()
 }
