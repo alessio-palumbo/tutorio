@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
-	"unicode/utf8"
+	"unicode"
 )
 
 // Segmenter splits a document at cue boundaries.
@@ -25,32 +25,54 @@ func (s CueSegmenter) Segment(ctx context.Context, doc Document) ([]Segment, err
 	}
 	var result []Segment
 	var b strings.Builder
+	characters := 0
 	var start, end = doc.Cues[0].Start, doc.Cues[0].End
 	reference := doc.Cues[0].Reference
+	titleHint := doc.Cues[0].TitleHint
 	var chunks []SourceChunk
 	flush := func() {
 		if b.Len() == 0 {
 			return
 		}
-		result = append(result, Segment{Index: len(result), Start: start, End: end, Text: strings.TrimSpace(b.String()), Reference: reference, Chunks: chunks})
+		result = append(result, Segment{Index: len(result), Start: start, End: end, Text: strings.TrimSpace(b.String()), Reference: reference, Chunks: chunks, TitleHint: titleHint})
 		b.Reset()
+		characters = 0
 		chunks = nil
+		titleHint = ""
 	}
+	begin := func(cue Cue) {
+		start = cue.Start
+		end = cue.End
+		reference = cue.Reference
+		titleHint = cue.TitleHint
+	}
+	minimumBoundarySize := max(1, s.maxCharacters/3)
 	for _, originalCue := range doc.Cues {
 		cues := splitCue(originalCue, s.maxCharacters)
 		for _, cue := range cues {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if b.Len() > 0 && b.Len()+len(cue.Text)+1 > s.maxCharacters {
+			cueCharacters := len([]rune(cue.Text))
+			structuralBoundary := cue.BoundaryKind == "chapter" || cue.BoundaryKind == "heading" && characters >= minimumBoundarySize
+			longPause := b.Len() > 0 && characters >= minimumBoundarySize && cue.Start-end >= 8*time.Second
+			if b.Len() > 0 && (structuralBoundary || longPause) {
 				flush()
-				start = cue.Start
-				reference = cue.Reference
+				begin(cue)
+			}
+			if b.Len() > 0 && characters+cueCharacters+1 > s.maxCharacters {
+				flush()
+				begin(cue)
+			}
+			if b.Len() == 0 {
+				begin(cue)
 			}
 			if b.Len() > 0 {
 				b.WriteByte(' ')
+				characters++
 			}
 			b.WriteString(cue.Text)
+			characters += cueCharacters
 			if cue.ChunkID != "" {
 				chunks = append(chunks, SourceChunk{ID: cue.ChunkID, Kind: cue.ChunkKind, Text: cue.Text, Reference: cue.Reference, Sequence: cue.Sequence})
 			}
@@ -70,7 +92,7 @@ func (s CueSegmenter) Segment(ctx context.Context, doc Document) ([]Segment, err
 }
 
 func splitCue(cue Cue, limit int) []Cue {
-	if len(cue.Text) <= limit {
+	if len([]rune(cue.Text)) <= limit {
 		return []Cue{cue}
 	}
 	parts := splitText(cue.Text, limit)
@@ -79,26 +101,31 @@ func splitCue(cue Cue, limit int) []Cue {
 	for index, text := range parts {
 		start := cue.Start + timeFraction(duration, index, len(parts))
 		end := cue.Start + timeFraction(duration, index+1, len(parts))
-		result = append(result, Cue{Start: start, End: end, Text: text, Reference: cue.Reference, ChunkID: cue.ChunkID, ChunkKind: cue.ChunkKind, Sequence: cue.Sequence})
+		part := Cue{Start: start, End: end, Text: text, Reference: cue.Reference, ChunkID: cue.ChunkID, ChunkKind: cue.ChunkKind, Sequence: cue.Sequence, TitleHint: cue.TitleHint}
+		if index == 0 {
+			part.BoundaryKind = cue.BoundaryKind
+		}
+		result = append(result, part)
 	}
 	return result
 }
 
 func splitText(text string, limit int) []string {
+	runes := []rune(strings.TrimSpace(text))
 	var parts []string
-	for len(text) > limit {
+	for len(runes) > limit {
 		cut := limit
-		for cut > 0 && !utf8.RuneStart(text[cut]) {
+		for cut > limit/2 && !unicode.IsSpace(runes[cut-1]) {
 			cut--
 		}
-		if whitespace := strings.LastIndexAny(text[:cut], " \t\n"); whitespace > 0 {
-			cut = whitespace
+		if cut <= limit/2 {
+			cut = limit
 		}
-		parts = append(parts, strings.TrimSpace(text[:cut]))
-		text = strings.TrimSpace(text[cut:])
+		parts = append(parts, strings.TrimSpace(string(runes[:cut])))
+		runes = []rune(strings.TrimSpace(string(runes[cut:])))
 	}
-	if text = strings.TrimSpace(text); text != "" {
-		parts = append(parts, text)
+	if value := strings.TrimSpace(string(runes)); value != "" {
+		parts = append(parts, value)
 	}
 	return parts
 }

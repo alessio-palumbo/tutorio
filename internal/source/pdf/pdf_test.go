@@ -31,6 +31,9 @@ func TestFetchPreservesPDFPageNumbers(t *testing.T) {
 	if doc.Title != "handbook" || len(doc.Cues) != 3 || doc.Cues[2].Reference.PageStart != 2 || doc.Cues[0].ChunkID == "" || doc.Cues[0].Sequence != 0 || doc.SourceID == path {
 		t.Fatalf("unexpected document: %#v", doc)
 	}
+	if doc.Cues[0].BoundaryKind != "heading" || doc.Cues[0].TitleHint != "Heading" {
+		t.Fatalf("heading structure was not preserved: %#v", doc.Cues[0])
+	}
 }
 
 func TestFetchRejectsImageOnlyPDF(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/alessio/tutorio/internal/source"
 	"github.com/alessio/tutorio/internal/transcript"
@@ -79,7 +80,12 @@ func (s *Source) Fetch(ctx context.Context, request source.Request) (transcript.
 		pageNumber := index + 1
 		for _, text := range splitSourceChunks(page, 4000) {
 			id := sourceChunkID(fingerprint, pageNumber, text)
-			cues = append(cues, transcript.Cue{Text: text, Reference: transcript.Reference{Kind: "page", PageStart: pageNumber, PageEnd: pageNumber, Label: fmt.Sprintf("PDF page %d", pageNumber)}, ChunkID: id, ChunkKind: "text", Sequence: sequence})
+			cue := transcript.Cue{Text: text, Reference: transcript.Reference{Kind: "page", PageStart: pageNumber, PageEnd: pageNumber, Label: fmt.Sprintf("PDF page %d", pageNumber)}, ChunkID: id, ChunkKind: "text", Sequence: sequence}
+			if looksLikeHeading(text) {
+				cue.BoundaryKind = "heading"
+				cue.TitleHint = text
+			}
+			cues = append(cues, cue)
 			sequence++
 		}
 	}
@@ -133,3 +139,16 @@ func splitSourceChunks(page string, limit int) []string {
 }
 
 func normalizeChunkText(value string) string { return strings.Join(strings.Fields(value), " ") }
+
+func looksLikeHeading(value string) bool {
+	value = strings.TrimSpace(value)
+	words := strings.Fields(value)
+	if len(words) == 0 || len(words) > 10 || len([]rune(value)) > 100 {
+		return false
+	}
+	if strings.ContainsAny(value, ".?!") {
+		return false
+	}
+	first := []rune(value)[0]
+	return unicode.IsUpper(first) || unicode.IsDigit(first)
+}

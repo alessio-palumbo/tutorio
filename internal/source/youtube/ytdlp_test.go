@@ -13,7 +13,7 @@ type subtitleRunner struct{ calls int }
 func (r *subtitleRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
 	r.calls++
 	if r.calls == 1 {
-		return []byte(`{"id":"video-1","title":"Timed lesson"}`), nil
+		return []byte(`{"id":"video-1","title":"Timed lesson","chapters":[{"title":"Practical setup","start_time":60}]}`), nil
 	}
 	for index, arg := range args {
 		if arg == "-o" && index+1 < len(args) {
@@ -32,5 +32,8 @@ func TestFetchParsesDownloadedVTTAsTimedTranscript(t *testing.T) {
 	}
 	if doc.SourceID != "video-1" || len(doc.Cues) != 1 || doc.Cues[0].Start.Seconds() != 62 {
 		t.Fatalf("unexpected timed document: %#v", doc)
+	}
+	if doc.Cues[0].BoundaryKind != "chapter" || doc.Cues[0].TitleHint != "Practical setup" {
+		t.Fatalf("chapter metadata was not applied: %#v", doc.Cues[0])
 	}
 }

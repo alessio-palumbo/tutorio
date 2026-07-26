@@ -63,8 +63,12 @@ func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Docum
 		return transcript.Document{}, fmt.Errorf("read YouTube metadata: %w: %s", err, strings.TrimSpace(string(metadata)))
 	}
 	var meta struct {
-		ID    string `json:"id"`
-		Title string `json:"title"`
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Chapters []struct {
+			Title     string  `json:"title"`
+			StartTime float64 `json:"start_time"`
+		} `json:"chapters"`
 	}
 	if err := json.Unmarshal(metadata, &meta); err != nil {
 		return transcript.Document{}, fmt.Errorf("decode metadata: %w", err)
@@ -88,5 +92,25 @@ func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Docum
 	doc, err := y.parser.Parse(ctx, files[0], f)
 	doc.SourceID = meta.ID
 	doc.Title = meta.Title
+	applyChapterBoundaries(&doc, meta.Chapters)
 	return doc, err
+}
+
+func applyChapterBoundaries(doc *transcript.Document, chapters []struct {
+	Title     string  `json:"title"`
+	StartTime float64 `json:"start_time"`
+}) {
+	for _, chapter := range chapters {
+		title := strings.TrimSpace(chapter.Title)
+		if title == "" {
+			continue
+		}
+		for index := range doc.Cues {
+			if doc.Cues[index].End.Seconds() > chapter.StartTime {
+				doc.Cues[index].BoundaryKind = "chapter"
+				doc.Cues[index].TitleHint = title
+				break
+			}
+		}
+	}
 }

@@ -12,13 +12,15 @@ type Reference struct {
 
 // Cue is a timestamped piece of source text.
 type Cue struct {
-	Start     time.Duration `json:"start"`
-	End       time.Duration `json:"end"`
-	Text      string        `json:"text"`
-	Reference Reference     `json:"reference,omitempty"`
-	ChunkID   string        `json:"chunk_id,omitempty"`
-	ChunkKind string        `json:"chunk_kind,omitempty"`
-	Sequence  int           `json:"sequence,omitempty"`
+	Start        time.Duration `json:"start"`
+	End          time.Duration `json:"end"`
+	Text         string        `json:"text"`
+	Reference    Reference     `json:"reference,omitempty"`
+	ChunkID      string        `json:"chunk_id,omitempty"`
+	ChunkKind    string        `json:"chunk_kind,omitempty"`
+	Sequence     int           `json:"sequence,omitempty"`
+	BoundaryKind string        `json:"boundary_kind,omitempty"`
+	TitleHint    string        `json:"title_hint,omitempty"`
 }
 
 // Document is the normalized transcript exchanged by pipeline stages.
@@ -49,4 +51,5 @@ type Segment struct {
 	Text      string        `json:"text"`
 	Reference Reference     `json:"reference,omitempty"`
 	Chunks    []SourceChunk `json:"chunks,omitempty"`
+	TitleHint string        `json:"title_hint,omitempty"`
 }

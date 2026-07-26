@@ -21,15 +21,27 @@ var whitespacePattern = regexp.MustCompile(`\s+`)
 func (TextCleaner) Clean(ctx context.Context, doc Document) (Document, error) {
 	cleaned := make([]Cue, 0, len(doc.Cues))
 	previous := ""
+	pendingBoundary := ""
+	pendingTitle := ""
 	for _, cue := range doc.Cues {
 		if err := ctx.Err(); err != nil {
 			return Document{}, err
+		}
+		if cue.BoundaryKind != "" {
+			pendingBoundary = cue.BoundaryKind
+			pendingTitle = cue.TitleHint
 		}
 		text := strings.TrimSpace(whitespacePattern.ReplaceAllString(tagPattern.ReplaceAllString(html.UnescapeString(cue.Text), ""), " "))
 		if text == "" || text == previous {
 			continue
 		}
 		cue.Text = text
+		if pendingBoundary != "" {
+			cue.BoundaryKind = pendingBoundary
+			cue.TitleHint = pendingTitle
+			pendingBoundary = ""
+			pendingTitle = ""
+		}
 		cleaned = append(cleaned, cue)
 		previous = text
 	}
