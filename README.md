@@ -132,6 +132,21 @@ For a newly generated PDF guide, selecting a citation opens a lightweight eviden
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
+### Generation metrics
+
+Generation details describe model workload and speed, not guide quality:
+
+- **Model** is the Ollama model that generated the guide sections.
+- **Sections** is the number of bounded source segments sent as separate generation requests. More sections can add request overhead even when total token counts are similar.
+- **Duration** is the sum of Ollama's total duration for the successful section requests. It includes more than token evaluation, so it will be longer than the two evaluation times alone. It does not currently include source extraction, final verification/storage, or overview synthesis.
+- **Tokens in/out** are Ollama's prompt and generated token counts. Input tokens include the extracted source plus Tutorio's repeated instructions, structured-output schema, timestamps, and source metadata; they are therefore a model-workload measure rather than the exact size of the original source.
+- **Prompt speed** is prompt tokens divided by Ollama's prompt-evaluation duration. Prompt processing is highly parallel and is normally much faster than output generation.
+- **Generation speed** is output tokens divided by Ollama's output-evaluation duration. Output is generated autoregressively, so each token depends on the preceding token.
+
+The speed figures are weighted aggregates across all sections: total tokens divided by total corresponding evaluation time. They are useful for comparing inference speed on the same hardware and broadly similar workloads, but they do not measure completeness, accuracy, concision, or source fidelity. Older guides created before evaluation timing was stored omit these rates rather than estimate them.
+
+Raw file bytes are intentionally not shown as an ingestion metric. They are not comparable across PDFs, subtitles, videos, and future source types, and may include images or compression unrelated to extracted text. A future source-neutral extracted-text size could complement token counts without conflating file size with model workload.
+
 ## Prerequisites
 
 - Go 1.25 or newer.
