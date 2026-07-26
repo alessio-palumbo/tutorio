@@ -4,6 +4,10 @@ Tutorio is a local-first desktop application that reconstructs long-form tutoria
 
 Everything runs on the user's machine. There are no cloud services, accounts, or authentication.
 
+![Tutorio library showing PDF and YouTube guides](docs/images/library.png)
+
+*Compile a YouTube tutorial or local document, then return to it from the local guide library.*
+
 ## Download
 
 Prebuilt macOS, Windows, and Linux artifacts are published on the [GitHub Releases page](https://github.com/alessio-palumbo/tutorio/releases).
@@ -116,7 +120,15 @@ This keeps future media capabilities out of the text-only MVP while leaving clea
 
 The stored guide includes a synthesized overview with readiness metadata, prerequisites, final outcome, ordered steps, citations, transcript evidence, important concepts, commands, keyboard shortcuts, warnings, common mistakes, cheat sheet, appendix, source timestamps, source-grounded deep dives, and generation metadata. SQLite stores searchable identity/summary columns plus the complete versionable guide as validated JSON. Registered sources, immutable source chunks, and evidence identities are normalized for reuse. Jobs and individual transcript/model sections are persisted separately for recovery, targeted regeneration, overview retry, timing, and local diagnostics. The base schema is in [`internal/storage/sqlite/schema.sql`](internal/storage/sqlite/schema.sql), with numbered changes in [`internal/storage/sqlite/migrations`](internal/storage/sqlite/migrations).
 
+![Tutorio guide showing generation details and collapsible sections](docs/images/guide-sections.png)
+
+*Generated guides are organised into navigable sections that can be expanded, regenerated, or explored in more depth.*
+
 For a newly generated PDF guide, selecting a citation opens a lightweight evidence drawer containing the exact extracted chunk, its neighbouring chunks, the source title, physical PDF page, and a locally rendered page preview for figures, tables, and formatting. “Open full PDF” remains a secondary native-viewer fallback. Older saved guides with page-only references still show the source and physical page, but correctly show no excerpt; recompile the PDF to create durable evidence. See [the evidence architecture decision](docs/architecture/evidence.md).
+
+![Tutorio evidence drawer showing a cited PDF page preview](docs/images/evidence-preview.png)
+
+*PDF citations open exact extracted evidence alongside a page preview, with the original document still available when more context is needed.*
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
 
