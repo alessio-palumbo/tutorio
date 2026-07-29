@@ -8,6 +8,49 @@ Everything runs on the user's machine. There are no cloud services, accounts, or
 
 *Compile a YouTube tutorial or local document, then return to it from the local guide library.*
 
+## Requirements
+
+Tutorio keeps processing local, but its runtime dependencies are installed separately and are not bundled with release downloads:
+
+- [Ollama](https://ollama.com/) running locally with the configured model. Tutorio recommends `gemma4:e4b`.
+- `yt-dlp` for YouTube sources.
+- Poppler's `pdftotext` and `pdftocairo` for PDF extraction and page previews.
+
+For example, on macOS:
+
+```sh
+brew install yt-dlp poppler
+ollama pull gemma4:e4b
+ollama serve
+```
+
+Scanned or image-only PDFs are detected but require a future OCR adapter; Tutorio does not silently generate a guide from missing text. Developer requirements such as Go, Wails, and Node.js are listed under [Development](#development).
+
+### Tool paths in downloaded applications
+
+Running `wails dev` from a terminal gives Tutorio the terminal's `PATH`. A downloaded application launched from Finder, the Windows desktop, or a graphical Linux launcher may receive a different, more restricted `PATH`. The tool can therefore be installed and work during development while the packaged application cannot find it.
+
+Find each executable from a terminal:
+
+```sh
+command -v yt-dlp
+command -v pdftotext
+command -v pdftocairo
+```
+
+On Windows PowerShell, use `Get-Command yt-dlp`, `Get-Command pdftotext`, and `Get-Command pdftocairo`, then read each command's `Source` value.
+
+Then place the returned absolute paths in the installed application's `config.yaml`. On Apple Silicon Homebrew, this commonly looks like:
+
+```yaml
+tools:
+  yt_dlp_path: /opt/homebrew/bin/yt-dlp
+  pdftotext_path: /opt/homebrew/bin/pdftotext
+  pdftocairo_path: /opt/homebrew/bin/pdftocairo
+```
+
+Intel macOS Homebrew commonly uses `/usr/local/bin` instead. Use the paths reported by your own system rather than assuming either location. See [Configuration](#configuration) for the platform-specific `config.yaml` location. Bare command names remain suitable when the application's environment already contains the installation directory.
+
 ## Download
 
 Prebuilt macOS, Windows, and Linux artifacts are published on the [GitHub Releases page](https://github.com/alessio-palumbo/tutorio/releases).
@@ -149,32 +192,6 @@ The speed figures are weighted aggregates across all sections: total tokens divi
 
 Raw file bytes are intentionally not shown as an ingestion metric. They are not comparable across PDFs, subtitles, videos, and future source types, and may include images or compression unrelated to extracted text. Extracted words and characters provide the source-neutral comparison instead. Word counts are whitespace-delimited and therefore less representative for languages that do not separate words with spaces; the Unicode-character count remains the more stable cross-language measure. Changing caption, transcription, OCR, or cleaning implementations can still change both counts, so the stored extraction method provides necessary context.
 
-## Prerequisites
-
-- Go 1.25 or newer.
-- Wails v2 and its platform prerequisites.
-- Node.js/npm for the Vite frontend.
-- `yt-dlp` on `PATH` for YouTube sources.
-- Poppler's `pdftotext` and `pdftocairo` on `PATH` for PDF text and page previews.
-- Ollama running locally with the configured model, initially `qwen3:8b`.
-
-For example:
-
-```sh
-ollama pull qwen3:8b
-ollama serve
-```
-
-On macOS, install the local source tools with:
-
-```sh
-brew install yt-dlp poppler
-```
-
-Scanned or image-only PDFs are detected but require a future OCR adapter; Tutorio does not silently generate a guide from missing text.
-
-Tutorio invokes tools locally and sends model requests only to the configured Ollama URL.
-
 ## Configuration
 
 Tutorio resolves configuration in this order:
@@ -191,7 +208,7 @@ If none exists, local defaults are used. Copy `config.example.yaml` to `config.y
 ```yaml
 ollama:
   base_url: http://127.0.0.1:11434
-  model: qwen3:8b
+  model: gemma4:e4b
   max_output_tokens: 8192
   context_window: 32768
 tools:
@@ -212,6 +229,8 @@ database:
 Prefer an absolute path for this override. Relative paths are resolved from the application's current working directory and can therefore select a different database depending on how Tutorio is launched.
 
 `segment_characters` is a hard Unicode-character budget, not a tokenizer target. Explicit YouTube chapters may create shorter sections. PDF headings and long transcript pauses are used only after enough content has accumulated, which avoids turning every small heading or silence into a separate section. When no trustworthy structure exists, Tutorio falls back to cue boundaries near the configured limit. A future semantic segmenter can replace these heuristics without changing the pipeline.
+
+Tutorio invokes configured tools locally and sends model requests only to the configured Ollama URL.
 
 ## Local data and upgrades
 
@@ -243,6 +262,12 @@ There is no universal best model: tutorial reconstruction trades generation time
 Keep `max_output_tokens`, `context_window`, segmentation, source URL, and prompt settings identical when comparing models. Compare total duration, step usefulness, timestamp accuracy, shortcut/command extraction, schema reliability, and unnecessary repetition—not output length alone.
 
 ## Development
+
+Development additionally requires:
+
+- Go 1.25 or newer.
+- Wails v2 and its [platform prerequisites](https://wails.io/docs/gettingstarted/installation).
+- Node.js/npm for the Vite frontend.
 
 Install dependencies and run tests:
 

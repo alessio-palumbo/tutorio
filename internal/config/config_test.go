@@ -35,3 +35,13 @@ func TestLoadAppliesDefaultsToPartialNestedConfig(t *testing.T) {
 		t.Fatalf("got pdftotext path %q", cfg.Tools.PDFToTextPath)
 	}
 }
+
+func TestLoadUsesRecommendedDefaultModel(t *testing.T) {
+	cfg, err := Load(filepath.Join(t.TempDir(), "missing.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Ollama.Model != "gemma4:e4b" {
+		t.Fatalf("got default model %q", cfg.Ollama.Model)
+	}
+}

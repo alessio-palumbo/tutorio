@@ -58,7 +58,7 @@ func defaults() Config {
 	if err != nil {
 		dir = "."
 	}
-	return Config{Database: Database{Path: filepath.Join(dir, "tutorio", "tutorio.db")}, Ollama: Ollama{BaseURL: "http://127.0.0.1:11434", Model: "qwen3:8b", MaxOutputTokens: 8192, ContextWindow: 32768}, Tools: Tools{YTDLPPath: "yt-dlp", PDFToTextPath: "pdftotext", PDFToCairoPath: "pdftocairo"}, Processing: Processing{SegmentCharacters: 12000}}
+	return Config{Database: Database{Path: filepath.Join(dir, "tutorio", "tutorio.db")}, Ollama: Ollama{BaseURL: "http://127.0.0.1:11434", Model: "gemma4:e4b", MaxOutputTokens: 8192, ContextWindow: 32768}, Tools: Tools{YTDLPPath: "yt-dlp", PDFToTextPath: "pdftotext", PDFToCairoPath: "pdftocairo"}, Processing: Processing{SegmentCharacters: 12000}}
 }
 func Load(path string) (Config, error) {
 	cfg := defaults()
