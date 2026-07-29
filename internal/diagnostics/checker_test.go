@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,11 @@ func TestCheckerReportsAvailableModelAndTools(t *testing.T) {
 		}
 		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"models":[{"name":"gemma4:e4b"}]}`))}, nil
 	})}
-	tool := filepath.Join(t.TempDir(), "tool")
+	toolName := "tool"
+	if runtime.GOOS == "windows" {
+		toolName += ".exe"
+	}
+	tool := filepath.Join(t.TempDir(), toolName)
 	if err := os.WriteFile(tool, []byte("tool"), 0o700); err != nil {
 		t.Fatal(err)
 	}
