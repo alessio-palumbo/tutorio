@@ -4,6 +4,76 @@
   align-items: center;
 }
 
+.setup-status {
+  margin-bottom: 38px;
+  padding: 22px;
+  border: 1px solid #d7b16d;
+  border-radius: 14px;
+  background: #fff8e9;
+}
+
+.setup-heading,
+.setup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.setup-heading h2 {
+  margin: 4px 0 0;
+  font: 25px Georgia, serif;
+}
+
+.setup-status ul {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-status li {
+  display: grid;
+  grid-template-columns: minmax(130px, .45fr) 1fr;
+  gap: 4px 16px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.setup-status li small {
+  grid-column: 2;
+  color: #7a5924;
+}
+
+.setup-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.setup-actions code {
+  overflow-wrap: anywhere;
+}
+
+.setup-actions small {
+  color: #777;
+}
+
+@media (max-width: 650px) {
+  .setup-heading {
+    align-items: flex-start;
+  }
+
+  .setup-status li {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-status li small {
+    grid-column: 1;
+  }
+}
+
 .card-actions button {
   padding: 9px 12px;
 }

@@ -11,7 +11,9 @@ import (
 	"regexp"
 	goruntime "runtime"
 	"strings"
+	"time"
 
+	"github.com/alessio/tutorio/internal/diagnostics"
 	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/exporter"
 	"github.com/alessio/tutorio/internal/guide"
@@ -30,10 +32,18 @@ type App struct {
 	manager  *jobs.Manager
 	evidence evidence.Repository
 	visual   evidence.VisualProvider
+	checker  diagnostics.Checker
+	config   string
 }
 
 func (a *App) WithVisualProvider(provider evidence.VisualProvider) *App {
 	a.visual = provider
+	return a
+}
+
+func (a *App) WithDiagnostics(checker diagnostics.Checker, configPath string) *App {
+	a.checker = checker
+	a.config = configPath
 	return a
 }
 
@@ -58,6 +68,35 @@ func (a *App) Shutdown(context.Context) {
 	if a.manager != nil {
 		a.manager.Stop()
 	}
+}
+
+func (a *App) GetSystemStatus() diagnostics.Report {
+	if a.checker == nil {
+		return diagnostics.Report{ConfigPath: a.config}
+	}
+	ctx, cancel := context.WithTimeout(a.context(), 4*time.Second)
+	defer cancel()
+	return a.checker.Check(ctx)
+}
+
+func (a *App) OpenConfiguration() error {
+	path, err := filepath.Abs(a.config)
+	if err != nil {
+		return fmt.Errorf("resolve configuration path: %w", err)
+	}
+	if _, err = os.Stat(path); err != nil {
+		return fmt.Errorf("open configuration: %w", err)
+	}
+	name, args, err := sourceOpenCommand(goruntime.GOOS, path)
+	if err != nil {
+		return err
+	}
+	command := exec.CommandContext(a.context(), name, args...)
+	if err = command.Start(); err != nil {
+		return fmt.Errorf("open configuration: %w", err)
+	}
+	go func() { _ = command.Wait() }()
+	return nil
 }
 func (a *App) CompileYouTube(uri string) (guide.Guide, error) {
 	if !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "http://") {

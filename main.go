@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alessio/tutorio/internal/config"
+	"github.com/alessio/tutorio/internal/diagnostics"
 	"github.com/alessio/tutorio/internal/exporter/markdown"
 	"github.com/alessio/tutorio/internal/guide"
 	"github.com/alessio/tutorio/internal/jobs"
@@ -40,6 +42,14 @@ var version = "0.1.0"
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	configPath := config.Path()
+	created, err := config.Ensure(configPath)
+	if err != nil {
+		logger.Error("prepare configuration", "error", err)
+		return
+	}
+	if created {
+		logger.Info("created default configuration", "path", configPath)
+	}
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		logger.Error("load configuration", "error", err)
@@ -70,8 +80,12 @@ func main() {
 	modelGenerator := guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow)
 	pipeline := jobs.NewPipeline(sources, transcript.NewCleaner(), transcript.NewSegmenter(cfg.Processing.SegmentCharacters), modelGenerator, guide.NewStructuralVerifier(), repository, logger, progress).WithStore(jobStore).WithExpander(modelGenerator).WithOverviewSynthesizer(modelGenerator).WithEvidenceRepository(evidenceRepository)
 	manager := jobs.NewManager(pipeline, jobStore, logger)
+	readiness := diagnostics.New(&http.Client{Timeout: 3 * time.Second}, cfg.Ollama.BaseURL, cfg.Ollama.Model, configPath, map[string]string{
+		"yt-dlp": cfg.Tools.YTDLPPath, "pdftotext": cfg.Tools.PDFToTextPath, "pdftocairo": cfg.Tools.PDFToCairoPath,
+	})
 	app := appui.NewApp(pipeline, repository, evidenceRepository, logger, markdown.New(), manager, progress).
-		WithVisualProvider(pdf.NewPageRenderer(cfg.Tools.PDFToCairoPath, pdf.OSCommandRunner{}))
+		WithVisualProvider(pdf.NewPageRenderer(cfg.Tools.PDFToCairoPath, pdf.OSCommandRunner{})).
+		WithDiagnostics(readiness, configPath)
 
 	err = wails.Run(&options.App{
 		Title: appTitle(), Width: 1200, Height: 800,

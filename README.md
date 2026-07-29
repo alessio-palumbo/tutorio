@@ -21,8 +21,9 @@ For example, on macOS:
 ```sh
 brew install yt-dlp poppler
 ollama pull gemma4:e4b
-ollama serve
 ```
+
+Ensure the Ollama service is running before compiling. The Ollama desktop application normally manages it automatically. If you installed only the command-line service and nothing else is running it, start `ollama serve` in a terminal and leave that process open. An “address already in use” error means an Ollama service is already listening, so a second one is unnecessary.
 
 Scanned or image-only PDFs are detected but require a future OCR adapter; Tutorio does not silently generate a guide from missing text. Developer requirements such as Go, Wails, and Node.js are listed under [Development](#development).
 
@@ -203,7 +204,9 @@ Tutorio resolves configuration in this order:
    - Linux: `$XDG_CONFIG_HOME/tutorio/config.yaml`, or `~/.config/tutorio/config.yaml`
    - Windows: `%AppData%\tutorio\config.yaml`
 
-If none exists, local defaults are used. Copy `config.example.yaml` to `config.yaml` in the repository root for `wails dev`, or place it at the platform path above for an installed application. The startup log reports the selected path and Ollama model.
+If no configuration exists, Tutorio creates one at the resolved platform path on first launch. It records absolute paths for supported tools when they can be discovered from the application environment or common installation locations, and otherwise retains editable command-name defaults. Existing configuration files are never overwritten.
+
+Copy `config.example.yaml` to `config.yaml` in the repository root when you want a project-specific development configuration for `wails dev`. The startup log reports the selected path and Ollama model. The library also shows a non-blocking local-setup panel when Ollama, the configured model, or a source-specific tool cannot be found. Use **Open configuration** from that panel to edit the generated file, then restart Tutorio to apply configuration changes. Missing `yt-dlp` affects YouTube compilation only; missing Poppler affects PDF extraction or previews without preventing access to saved guides.
 
 ```yaml
 ollama:

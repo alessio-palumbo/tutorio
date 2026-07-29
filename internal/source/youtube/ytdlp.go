@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -60,6 +61,9 @@ func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Docum
 	defer os.RemoveAll(dir)
 	metadata, err := y.runner.Run(ctx, y.binary, "--dump-single-json", "--skip-download", req.URI)
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return transcript.Document{}, fmt.Errorf("%s was not found; install yt-dlp or configure tools.yt_dlp_path: %w", y.binary, err)
+		}
 		return transcript.Document{}, fmt.Errorf("read YouTube metadata: %w: %s", err, strings.TrimSpace(string(metadata)))
 	}
 	var meta struct {

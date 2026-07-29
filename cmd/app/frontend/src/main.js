@@ -16,7 +16,7 @@ app.innerHTML = `
       <form id="compile-form"><label for="url">YouTube URL</label><div class="row"><input id="url" type="url" placeholder="https://youtube.com/watch?v=…" required><button>Compile guide</button></div></form><div class="import-row"><span>Or compile a PDF, TXT, SRT, or VTT file.</span><button class="quiet" id="import-file">Import file</button></div>
       <div id="message-row" class="message-row" hidden><div id="message" role="status"></div><button id="dismiss-message" class="message-dismiss" type="button" aria-label="Dismiss message" title="Dismiss">×</button></div><div id="progress" class="progress" hidden><div></div></div>
     </section>
-    <section id="library"><div id="job-area" hidden><div class="section-head"><h2>Compilation queue</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
+    <section id="library"><aside id="setup-status" class="setup-status" hidden aria-live="polite"></aside><div id="job-area" hidden><div class="section-head"><h2>Compilation queue</h2></div><div id="jobs" class="jobs"></div></div><div class="section-head"><h2>Library</h2><button class="quiet" id="refresh">Refresh</button></div><div id="guides" class="guides"><p class="muted">No guides loaded.</p></div></section>
     <section id="reader" hidden><div class="reader-actions"><button class="quiet back" id="back">← Library</button><button class="quiet back" id="export-guide">Export Markdown</button></div><div id="guide-content"></div></section>
     <button id="back-to-top" class="back-to-top" hidden aria-label="Back to top">↑ <span>Top</span></button>
     <aside id="evidence-panel" class="evidence-panel" hidden aria-label="Source evidence"><div class="evidence-card"><button class="quiet evidence-close" id="close-evidence" aria-label="Close evidence">Close</button><div id="evidence-content"></div></div></aside>
@@ -40,6 +40,7 @@ const lightboxStage = imageLightbox.querySelector('.lightbox-stage')
 const lightboxImage = imageLightbox.querySelector('img')
 const jobs = document.querySelector('#jobs')
 const jobArea = document.querySelector('#job-area')
+const setupStatus = document.querySelector('#setup-status')
 let currentGuide = null
 let currentSections = []
 let activeRegeneration = null
@@ -75,8 +76,22 @@ async function loadGuides() {
   try {
     const items = await backend().ListGuides()
     guides.innerHTML = items.length ? items.map(g => `<article class="guide-card"><button class="card-open-hit" data-guide-id="${escapeHTML(g.id)}" aria-label="Open ${escapeHTML(g.title)}"></button><button class="quiet danger card-delete" data-delete-guide="${escapeHTML(g.id)}" title="Delete guide" aria-label="Delete ${escapeHTML(g.title)}"><span aria-hidden="true">×</span></button><span>${escapeHTML(g.source_type)}</span><h3>${escapeHTML(g.title)}</h3><p>${escapeHTML(g.overview)}</p><small>${new Date(g.created_at).toLocaleString()}</small><strong>Open guide →</strong></article>`).join('') : '<p class="muted">Your generated guides will appear here.</p>'
-    await loadJobs()
+    await Promise.all([loadJobs(),loadSystemStatus()])
   } catch (err) { guides.innerHTML = `<p class="error">${escapeHTML(err)}</p>` }
+}
+
+async function loadSystemStatus(){
+  if(!backend()?.GetSystemStatus)return
+  try{
+    const report=await backend().GetSystemStatus()
+    const issues=asArray(report.checks).filter(check=>check.status!=='ready')
+    if(!issues.length){setupStatus.hidden=true;setupStatus.innerHTML='';return}
+    setupStatus.innerHTML=`<div class="setup-heading"><div><span class="eyebrow">LOCAL SETUP</span><h2>Some features need attention</h2></div><button class="quiet" data-check-system>Check again</button></div><ul>${issues.map(check=>`<li class="setup-${escapeHTML(check.status)}"><strong>${escapeHTML(check.name)}</strong><span>${escapeHTML(check.message)}</span>${check.action?`<small>${escapeHTML(check.action)}</small>`:''}</li>`).join('')}</ul><div class="setup-actions"><button class="quiet" data-open-config>Open configuration</button><code>${escapeHTML(report.config_path)}</code><small>Restart Tutorio after changing configuration values.</small></div>`
+    setupStatus.hidden=false
+  }catch(err){
+    setupStatus.innerHTML=`<div class="setup-heading"><div><span class="eyebrow">LOCAL SETUP</span><h2>Could not check local dependencies</h2><p>${escapeHTML(err)}</p></div><button class="quiet" data-check-system>Retry</button></div>`
+    setupStatus.hidden=false
+  }
 }
 
 const durationLabel=milliseconds=>{const seconds=Math.max(0,Math.round((Number(milliseconds)||0)/1000)),hours=Math.floor(seconds/3600),minutes=Math.floor((seconds%3600)/60),remainder=seconds%60;return hours?`${hours}h ${minutes}m ${remainder}s`:minutes?`${minutes}m ${remainder}s`:`${remainder}s`}
@@ -194,6 +209,7 @@ document.querySelector('#compile-form').addEventListener('submit', async event =
 	finally { button.disabled = false; if (!queued) progress.hidden = true }
 })
 document.querySelector('#refresh').addEventListener('click', loadGuides)
+setupStatus.addEventListener('click',async event=>{const check=event.target.closest('[data-check-system]');const open=event.target.closest('[data-open-config]');if(check){check.disabled=true;await loadSystemStatus();return}if(open){open.disabled=true;try{await backend().OpenConfiguration()}catch(err){showMessage(err,{dismissible:true});open.disabled=false}}})
 document.querySelector('#import-file').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{const job=await backend().SelectAndQueueFile();if(job?.id){showMessage('File compilation queued.',{dismissible:true});progress.hidden=false;progress.classList.remove('indeterminate');progress.querySelector('div').style.width='4%';await loadJobs()}}catch(err){showMessage(err,{dismissible:true})}finally{button.disabled=false}})
 guides.addEventListener('click',async event=>{const remove=event.target.closest('[data-delete-guide]');if(remove){remove.disabled=true;try{const deleted=await backend().DeleteGuide(remove.dataset.deleteGuide);if(deleted){forgetGuidePosition(remove.dataset.deleteGuide);forgetExpandedSections(remove.dataset.deleteGuide);forgetOpenReferenceBlocks(remove.dataset.deleteGuide);showMessage('Guide deleted.',{dismissible:true});await loadGuides()}else{remove.disabled=false}}catch(err){showMessage(err,{dismissible:true});remove.disabled=false}return}const open=event.target.closest('[data-guide-id]');if(open)openGuide(open.dataset.guideId)})
 jobs.addEventListener('click',async event=>{const retry=event.target.closest('[data-retry-job]');const runFirst=event.target.closest('[data-run-first-job]');const cancel=event.target.closest('[data-cancel-job]');const diagnostic=event.target.closest('[data-show-job]');const button=retry||runFirst||cancel||diagnostic;if(!button)return;button.disabled=true;try{if(diagnostic){const sections=await backend().GetJobSections(diagnostic.dataset.showJob);const failed=[...sections].reverse().find(section=>section.error||section.raw_response);const card=diagnostic.closest('[data-job]');card.querySelector('.job-diagnostic')?.remove();card.insertAdjacentHTML('beforeend',`<details class="job-diagnostic" open><summary>Section ${(failed?.index??0)+1} model response</summary><p>${escapeHTML(failed?.error||'No section error was recorded.')}</p>${failed?.raw_response?`<pre><code>${escapeHTML(failed.raw_response)}</code></pre>`:'<p>No raw response was returned by the model.</p>'}</details>`);button.disabled=false;return}if(retry){await backend().RetryJob(retry.dataset.retryJob);showMessage('Failed section requeued; completed sections will be reused.',{dismissible:true})}else if(runFirst){await backend().RunFirstJob(runFirst.dataset.runFirstJob);showMessage('Pausing the active compilation; this one will run first.')}else{await backend().CancelJob(cancel.dataset.cancelJob);showMessage('Compilation cancelled.',{dismissible:true})}await loadJobs()}catch(err){showMessage(err,{dismissible:true});button.disabled=false}})

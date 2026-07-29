@@ -3,7 +3,9 @@ package pdf
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -32,6 +34,9 @@ func (r *PageRenderer) Render(ctx context.Context, source evidence.Source, physi
 	page := strconv.Itoa(physicalPage)
 	output, err := r.runner.Run(ctx, r.binary, "-png", "-singlefile", "-f", page, "-l", page, "-scale-to", "2000", source.Locator, "-")
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return evidence.Visual{}, fmt.Errorf("%s was not found; install Poppler or configure tools.pdftocairo_path: %w", r.binary, err)
+		}
 		return evidence.Visual{}, fmt.Errorf("render PDF page %d with %s: %w", physicalPage, r.binary, err)
 	}
 	if len(output) == 0 {
