@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/alessio/tutorio/internal/source"
 	"github.com/alessio/tutorio/internal/transcript"
@@ -41,6 +42,7 @@ func (OSCommandRunner) Run(ctx context.Context, name string, args ...string) ([]
 }
 
 type YTDLP struct {
+	mu     sync.RWMutex
 	binary string
 	runner CommandRunner
 	parser transcript.FileParser
@@ -53,16 +55,27 @@ func New(binary string, runner CommandRunner) *YTDLP {
 	return &YTDLP{binary: binary, runner: runner, parser: transcript.NewFileParser()}
 }
 func (*YTDLP) Type() string { return "youtube" }
+func (y *YTDLP) SetBinary(binary string) {
+	y.mu.Lock()
+	defer y.mu.Unlock()
+	y.binary = strings.TrimSpace(binary)
+}
+func (y *YTDLP) binaryPath() string {
+	y.mu.RLock()
+	defer y.mu.RUnlock()
+	return y.binary
+}
 func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Document, error) {
+	binary := y.binaryPath()
 	dir, err := os.MkdirTemp("", "tutorio-youtube-")
 	if err != nil {
 		return transcript.Document{}, err
 	}
 	defer os.RemoveAll(dir)
-	metadata, err := y.runner.Run(ctx, y.binary, "--dump-single-json", "--skip-download", req.URI)
+	metadata, err := y.runner.Run(ctx, binary, "--dump-single-json", "--skip-download", req.URI)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return transcript.Document{}, fmt.Errorf("%s was not found; install yt-dlp or configure tools.yt_dlp_path: %w", y.binary, err)
+			return transcript.Document{}, fmt.Errorf("%s was not found; install yt-dlp or configure tools.yt_dlp_path: %w", binary, err)
 		}
 		return transcript.Document{}, fmt.Errorf("read YouTube metadata: %w: %s", err, strings.TrimSpace(string(metadata)))
 	}
@@ -78,7 +91,7 @@ func (y *YTDLP) Fetch(ctx context.Context, req source.Request) (transcript.Docum
 		return transcript.Document{}, fmt.Errorf("decode metadata: %w", err)
 	}
 	output := filepath.Join(dir, "transcript")
-	result, err := y.runner.Run(ctx, y.binary, "--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", "en.*,en", "--sub-format", "vtt", "-o", output, req.URI)
+	result, err := y.runner.Run(ctx, binary, "--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", "en.*,en", "--sub-format", "vtt", "-o", output, req.URI)
 	if err != nil {
 		return transcript.Document{}, fmt.Errorf("retrieve transcript: %w: %s", err, strings.TrimSpace(string(result)))
 	}

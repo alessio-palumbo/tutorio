@@ -83,3 +83,36 @@ func TestEnsureCreatesEditableConfigurationOnce(t *testing.T) {
 		t.Fatalf("existing configuration changed: %q", data)
 	}
 }
+
+func TestUpdateToolsPreservesOtherConfiguration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	initial := "database:\n  path: /tmp/library.db\nollama:\n  model: custom-model\nprocessing:\n  segment_characters: 9000\n"
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tools := Tools{YTDLPPath: "/tools/yt-dlp", PDFToTextPath: "/tools/pdftotext", PDFToCairoPath: "/tools/pdftocairo"}
+	if err := UpdateTools(path, tools); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Tools != tools {
+		t.Fatalf("tools = %#v", cfg.Tools)
+	}
+	if cfg.Database.Path != "/tmp/library.db" || cfg.Ollama.Model != "custom-model" || cfg.Processing.SegmentCharacters != 9000 {
+		t.Fatalf("unrelated configuration changed: %#v", cfg)
+	}
+}
+
+func TestUpdateToolsRejectsEmptyPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("ollama:\n  model: gemma4:e4b\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := UpdateTools(path, Tools{YTDLPPath: "yt-dlp", PDFToTextPath: "", PDFToCairoPath: "pdftocairo"})
+	if err == nil || !strings.Contains(err.Error(), "pdftotext_path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

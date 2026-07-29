@@ -152,6 +152,9 @@ func Load(path string) (Config, error) {
 	if cfg.Processing.SegmentCharacters <= 0 {
 		cfg.Processing.SegmentCharacters = 12000
 	}
+	if cfg.Tools.YTDLPPath == "" {
+		cfg.Tools.YTDLPPath = "yt-dlp"
+	}
 	if cfg.Tools.PDFToTextPath == "" {
 		cfg.Tools.PDFToTextPath = "pdftotext"
 	}
@@ -159,4 +162,45 @@ func Load(path string) (Config, error) {
 		cfg.Tools.PDFToCairoPath = "pdftocairo"
 	}
 	return cfg, nil
+}
+
+// UpdateTools changes only executable locations while preserving the remaining
+// configuration. The replacement is written atomically in the same directory.
+func UpdateTools(path string, tools Tools) error {
+	for name, value := range map[string]string{
+		"tools.yt_dlp_path": tools.YTDLPPath, "tools.pdftotext_path": tools.PDFToTextPath, "tools.pdftocairo_path": tools.PDFToCairoPath,
+	} {
+		if value == "" {
+			return fmt.Errorf("%s cannot be empty", name)
+		}
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		return err
+	}
+	cfg.Tools = tools
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("encode configuration: %w", err)
+	}
+	dir := filepath.Dir(path)
+	file, err := os.CreateTemp(dir, ".tutorio-config-*")
+	if err != nil {
+		return fmt.Errorf("create temporary configuration: %w", err)
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if err = file.Chmod(0o600); err == nil {
+		_, err = file.Write(append([]byte("# Tutorio local configuration.\n"), data...))
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("write configuration: %w", err)
+	}
+	if err = os.Rename(temporary, path); err != nil {
+		return fmt.Errorf("replace configuration: %w", err)
+	}
+	return nil
 }

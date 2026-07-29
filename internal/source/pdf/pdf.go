@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/alessio/tutorio/internal/source"
@@ -41,6 +42,7 @@ func (OSCommandRunner) Run(ctx context.Context, name string, args ...string) ([]
 }
 
 type Source struct {
+	mu     sync.RWMutex
 	binary string
 	runner CommandRunner
 }
@@ -57,18 +59,29 @@ func New(binary string, runner CommandRunner) *Source {
 }
 
 func (*Source) Type() string { return "pdf" }
+func (s *Source) SetBinary(binary string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.binary = strings.TrimSpace(binary)
+}
+func (s *Source) binaryPath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.binary
+}
 
 func (s *Source) Fetch(ctx context.Context, request source.Request) (transcript.Document, error) {
+	binary := s.binaryPath()
 	fingerprint, err := fingerprintFile(request.URI)
 	if err != nil {
 		return transcript.Document{}, fmt.Errorf("fingerprint PDF: %w", err)
 	}
-	output, err := s.runner.Run(ctx, s.binary, "-layout", "-enc", "UTF-8", request.URI, "-")
+	output, err := s.runner.Run(ctx, binary, "-layout", "-enc", "UTF-8", request.URI, "-")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return transcript.Document{}, fmt.Errorf("%s was not found; install Poppler or configure tools.pdftotext_path: %w", s.binary, err)
+			return transcript.Document{}, fmt.Errorf("%s was not found; install Poppler or configure tools.pdftotext_path: %w", binary, err)
 		}
-		return transcript.Document{}, fmt.Errorf("extract PDF text with %s: %w", s.binary, err)
+		return transcript.Document{}, fmt.Errorf("extract PDF text with %s: %w", binary, err)
 	}
 	pages := strings.Split(strings.ReplaceAll(string(output), "\r\n", "\n"), "\f")
 	cues := make([]transcript.Cue, 0, len(pages)*3)

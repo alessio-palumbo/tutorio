@@ -23,14 +23,16 @@ func (r *visualRunner) Run(_ context.Context, name string, args ...string) ([]by
 
 func TestPageRendererReturnsLocalPNGData(t *testing.T) {
 	runner := &visualRunner{data: []byte("\x89PNG\r\n")}
-	got, err := NewPageRenderer("pdftocairo", runner).Render(context.Background(), evidence.Source{ID: "source-1", Kind: "pdf", Locator: "/private/book.pdf"}, 17)
+	renderer := NewPageRenderer("pdftocairo", runner)
+	renderer.SetBinary("/tools/pdftocairo")
+	got, err := renderer.Render(context.Background(), evidence.Source{ID: "source-1", Kind: "pdf", Locator: "/private/book.pdf"}, 17)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.PhysicalPage != 17 || got.SourceID != "source-1" || got.MediaType != "image/png" || !strings.HasPrefix(got.DataURL, "data:image/png;base64,") {
 		t.Fatalf("unexpected visual: %#v", got)
 	}
-	if runner.name != "pdftocairo" || !containsArguments(runner.args, "-f", "17", "/private/book.pdf", "-") {
+	if runner.name != "/tools/pdftocairo" || !containsArguments(runner.args, "-f", "17", "/private/book.pdf", "-") {
 		t.Fatalf("unexpected renderer invocation: %q %#v", runner.name, runner.args)
 	}
 }

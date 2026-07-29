@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type Check struct {
@@ -24,6 +24,13 @@ type Check struct {
 type Report struct {
 	ConfigPath string  `json:"config_path"`
 	Checks     []Check `json:"checks"`
+	Tools      []Tool  `json:"tools"`
+}
+
+type Tool struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Path  string `json:"path"`
 }
 
 type Checker interface {
@@ -31,11 +38,18 @@ type Checker interface {
 }
 
 type LocalChecker struct {
+	mu         sync.RWMutex
 	client     *http.Client
 	baseURL    string
 	model      string
 	configPath string
 	tools      map[string]string
+}
+
+func (c *LocalChecker) SetTools(tools map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tools = cloneTools(tools)
 }
 
 func New(client *http.Client, baseURL, model, configPath string, tools map[string]string) *LocalChecker {
@@ -44,7 +58,7 @@ func New(client *http.Client, baseURL, model, configPath string, tools map[strin
 	}
 	return &LocalChecker{
 		client: client, baseURL: strings.TrimRight(baseURL, "/"), model: model,
-		configPath: configPath, tools: tools,
+		configPath: configPath, tools: cloneTools(tools),
 	}
 }
 
@@ -61,21 +75,27 @@ func (c *LocalChecker) Check(ctx context.Context) Report {
 	} else {
 		checks = append(checks, Check{ID: "ollama-model", Name: "Ollama model", Status: "unknown", Message: fmt.Sprintf("Cannot check model %s until Ollama is reachable.", c.model)})
 	}
-	for _, tool := range []struct {
+	toolDefinitions := []struct {
 		id, name, configKey, install string
 	}{
 		{"yt-dlp", "YouTube support", "yt-dlp", "Install yt-dlp or set tools.yt_dlp_path."},
 		{"pdftotext", "PDF text extraction", "pdftotext", "Install Poppler or set tools.pdftotext_path."},
 		{"pdftocairo", "PDF page previews", "pdftocairo", "Install Poppler or set tools.pdftocairo_path."},
-	} {
-		path := c.tools[tool.configKey]
+	}
+	tools := make([]Tool, 0, len(toolDefinitions))
+	c.mu.RLock()
+	configuredTools := cloneTools(c.tools)
+	c.mu.RUnlock()
+	for _, tool := range toolDefinitions {
+		path := configuredTools[tool.configKey]
+		tools = append(tools, Tool{ID: tool.id, Label: tool.name, Path: path})
 		if resolved, ok := executablePath(path); ok {
 			checks = append(checks, Check{ID: tool.id, Name: tool.name, Status: "ready", Message: resolved})
 		} else {
 			checks = append(checks, Check{ID: tool.id, Name: tool.name, Status: "missing", Message: fmt.Sprintf("%s was not found.", path), Action: tool.install})
 		}
 	}
-	return Report{ConfigPath: c.configPath, Checks: checks}
+	return Report{ConfigPath: c.configPath, Checks: checks, Tools: tools}
 }
 
 func (c *LocalChecker) checkOllama(ctx context.Context) ([]Check, []string) {
@@ -112,12 +132,26 @@ func executablePath(value string) (string, bool) {
 	if value == "" {
 		return "", false
 	}
-	if strings.ContainsRune(value, os.PathSeparator) || filepath.IsAbs(value) {
-		info, err := os.Stat(value)
-		return value, err == nil && !info.IsDir()
-	}
 	path, err := exec.LookPath(value)
 	return path, err == nil
+}
+
+func ValidateExecutable(value string) (string, error) {
+	if path, ok := executablePath(value); ok {
+		if absolute, err := filepath.Abs(path); err == nil {
+			return absolute, nil
+		}
+		return path, nil
+	}
+	return "", fmt.Errorf("%s is not an executable file", strings.TrimSpace(value))
+}
+
+func cloneTools(values map[string]string) map[string]string {
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func containsModel(models []string, configured string) bool {

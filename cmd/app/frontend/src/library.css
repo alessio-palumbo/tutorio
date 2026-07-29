@@ -5,7 +5,7 @@
 }
 
 .setup-status {
-  margin-bottom: 38px;
+  margin: 38px 0;
   padding: 22px;
   border: 1px solid #d7b16d;
   border-radius: 14px;
@@ -60,6 +60,51 @@
   color: #777;
 }
 
+.tool-path-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.tool-path-row {
+  display: grid;
+  grid-template-columns: minmax(160px, .4fr) 1fr auto;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.tool-path-row label {
+  font-weight: 700;
+}
+
+.tool-path-row input {
+  min-width: 0;
+  border: 1px solid #d7cfbd;
+  background: #fff;
+  padding: 10px 12px;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.tool-path-row button {
+  align-self: stretch;
+  min-width: 78px;
+  padding: 10px 16px;
+}
+
+.tool-path-row small {
+  grid-column: 2 / 4;
+  min-height: 18px;
+  color: #6e746d;
+}
+
+.tool-path-row small.error {
+  color: #9a3b32;
+}
+
+.tool-path-form .setup-actions {
+  margin-top: 6px;
+}
+
 @media (max-width: 650px) {
   .setup-heading {
     align-items: flex-start;
@@ -70,6 +115,15 @@
   }
 
   .setup-status li small {
+    grid-column: 1;
+  }
+
+  .tool-path-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .tool-path-row small {
     grid-column: 1;
   }
 }
@@ -96,6 +150,21 @@
 .create .import-row button {
   color: #faf8f2;
   border-color: #718076;
+}
+
+.import-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 650px) {
+  .import-actions {
+    width: 100%;
+  }
+
+  .import-actions button {
+    flex: 1;
+  }
 }
 
 .progress.indeterminate div {

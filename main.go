@@ -39,9 +39,29 @@ var appIcon []byte
 
 var version = "0.1.0"
 
+type runtimeTools struct {
+	youtube *youtube.YTDLP
+	pdf     *pdf.Source
+	preview *pdf.PageRenderer
+	checker *diagnostics.LocalChecker
+}
+
+func (tools runtimeTools) ApplyToolPaths(paths config.Tools) {
+	tools.youtube.SetBinary(paths.YTDLPPath)
+	tools.pdf.SetBinary(paths.PDFToTextPath)
+	tools.preview.SetBinary(paths.PDFToCairoPath)
+	tools.checker.SetTools(map[string]string{
+		"yt-dlp": paths.YTDLPPath, "pdftotext": paths.PDFToTextPath, "pdftocairo": paths.PDFToCairoPath,
+	})
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	configPath := config.Path()
+	configPath, err := filepath.Abs(config.Path())
+	if err != nil {
+		logger.Error("resolve configuration path", "error", err)
+		return
+	}
 	created, err := config.Ensure(configPath)
 	if err != nil {
 		logger.Error("prepare configuration", "error", err)
@@ -71,10 +91,13 @@ func main() {
 	repository := sqlite.NewGuideRepository(db)
 	jobStore := sqlite.NewJobStore(db)
 	evidenceRepository := sqlite.NewEvidenceRepository(db)
+	youtubeSource := youtube.New(cfg.Tools.YTDLPPath, youtube.OSCommandRunner{})
+	pdfSource := pdf.New(cfg.Tools.PDFToTextPath, pdf.OSCommandRunner{})
+	pdfPreview := pdf.NewPageRenderer(cfg.Tools.PDFToCairoPath, pdf.OSCommandRunner{})
 	sources := source.NewRegistry(
-		youtube.New(cfg.Tools.YTDLPPath, youtube.OSCommandRunner{}),
+		youtubeSource,
 		local.NewTranscriptFile(transcript.NewFileParser()),
-		pdf.New(cfg.Tools.PDFToTextPath, pdf.OSCommandRunner{}),
+		pdfSource,
 	)
 	progress := appui.NewEventReporter()
 	modelGenerator := guide.NewLLMGenerator(provider, cfg.Ollama.MaxOutputTokens, cfg.Ollama.ContextWindow)
@@ -84,8 +107,9 @@ func main() {
 		"yt-dlp": cfg.Tools.YTDLPPath, "pdftotext": cfg.Tools.PDFToTextPath, "pdftocairo": cfg.Tools.PDFToCairoPath,
 	})
 	app := appui.NewApp(pipeline, repository, evidenceRepository, logger, markdown.New(), manager, progress).
-		WithVisualProvider(pdf.NewPageRenderer(cfg.Tools.PDFToCairoPath, pdf.OSCommandRunner{})).
-		WithDiagnostics(readiness, configPath)
+		WithVisualProvider(pdfPreview).
+		WithDiagnostics(readiness, configPath).
+		WithToolPathApplier(runtimeTools{youtube: youtubeSource, pdf: pdfSource, preview: pdfPreview, checker: readiness})
 
 	err = wails.Run(&options.App{
 		Title: appTitle(), Width: 1200, Height: 800,

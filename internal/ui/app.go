@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alessio/tutorio/internal/config"
 	"github.com/alessio/tutorio/internal/diagnostics"
 	"github.com/alessio/tutorio/internal/evidence"
 	"github.com/alessio/tutorio/internal/exporter"
@@ -23,17 +24,22 @@ import (
 )
 
 type App struct {
-	ctx      context.Context
-	pipeline *jobs.Pipeline
-	guides   guide.Repository
-	logger   *slog.Logger
-	progress *EventReporter
-	exporter exporter.Exporter
-	manager  *jobs.Manager
-	evidence evidence.Repository
-	visual   evidence.VisualProvider
-	checker  diagnostics.Checker
-	config   string
+	ctx        context.Context
+	pipeline   *jobs.Pipeline
+	guides     guide.Repository
+	logger     *slog.Logger
+	progress   *EventReporter
+	exporter   exporter.Exporter
+	manager    *jobs.Manager
+	evidence   evidence.Repository
+	visual     evidence.VisualProvider
+	checker    diagnostics.Checker
+	configPath string
+	tools      ToolPathApplier
+}
+
+type ToolPathApplier interface {
+	ApplyToolPaths(config.Tools)
 }
 
 func (a *App) WithVisualProvider(provider evidence.VisualProvider) *App {
@@ -43,7 +49,12 @@ func (a *App) WithVisualProvider(provider evidence.VisualProvider) *App {
 
 func (a *App) WithDiagnostics(checker diagnostics.Checker, configPath string) *App {
 	a.checker = checker
-	a.config = configPath
+	a.configPath = configPath
+	return a
+}
+
+func (a *App) WithToolPathApplier(applier ToolPathApplier) *App {
+	a.tools = applier
 	return a
 }
 
@@ -72,31 +83,39 @@ func (a *App) Shutdown(context.Context) {
 
 func (a *App) GetSystemStatus() diagnostics.Report {
 	if a.checker == nil {
-		return diagnostics.Report{ConfigPath: a.config}
+		return diagnostics.Report{ConfigPath: a.configPath}
 	}
 	ctx, cancel := context.WithTimeout(a.context(), 4*time.Second)
 	defer cancel()
 	return a.checker.Check(ctx)
 }
 
-func (a *App) OpenConfiguration() error {
-	path, err := filepath.Abs(a.config)
+func (a *App) SaveToolPath(id, value string) (diagnostics.Report, error) {
+	resolved, err := diagnostics.ValidateExecutable(value)
 	if err != nil {
-		return fmt.Errorf("resolve configuration path: %w", err)
+		return diagnostics.Report{}, err
 	}
-	if _, err = os.Stat(path); err != nil {
-		return fmt.Errorf("open configuration: %w", err)
-	}
-	name, args, err := sourceOpenCommand(goruntime.GOOS, path)
+	cfg, err := config.Load(a.configPath)
 	if err != nil {
-		return err
+		return diagnostics.Report{}, err
 	}
-	command := exec.CommandContext(a.context(), name, args...)
-	if err = command.Start(); err != nil {
-		return fmt.Errorf("open configuration: %w", err)
+	switch id {
+	case "yt-dlp":
+		cfg.Tools.YTDLPPath = resolved
+	case "pdftotext":
+		cfg.Tools.PDFToTextPath = resolved
+	case "pdftocairo":
+		cfg.Tools.PDFToCairoPath = resolved
+	default:
+		return diagnostics.Report{}, fmt.Errorf("unknown tool %q", id)
 	}
-	go func() { _ = command.Wait() }()
-	return nil
+	if err = config.UpdateTools(a.configPath, cfg.Tools); err != nil {
+		return diagnostics.Report{}, err
+	}
+	if a.tools != nil {
+		a.tools.ApplyToolPaths(cfg.Tools)
+	}
+	return a.GetSystemStatus(), nil
 }
 func (a *App) CompileYouTube(uri string) (guide.Guide, error) {
 	if !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "http://") {
@@ -111,6 +130,13 @@ func (a *App) QueueYouTube(uri string) (jobs.Job, error) {
 	if a.manager == nil {
 		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
 	}
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	if _, err = diagnostics.ValidateExecutable(cfg.Tools.YTDLPPath); err != nil {
+		return jobs.Job{}, fmt.Errorf("YouTube support is unavailable: %w", err)
+	}
 	return a.manager.Enqueue(a.context(), source.Request{Type: "youtube", URI: uri})
 }
 func (a *App) ImportTranscript(path string) (guide.Guide, error) {
@@ -119,27 +145,38 @@ func (a *App) ImportTranscript(path string) (guide.Guide, error) {
 	}
 	return a.pipeline.Run(a.context(), source.Request{Type: "transcript_file", URI: path})
 }
-func (a *App) SelectAndQueueFile() (jobs.Job, error) {
+func (a *App) SelectAndQueuePDF() (jobs.Job, error) {
+	cfg, err := config.Load(a.configPath)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	if _, err = diagnostics.ValidateExecutable(cfg.Tools.PDFToTextPath); err != nil {
+		return jobs.Job{}, fmt.Errorf("PDF import is unavailable: %w", err)
+	}
+	return a.selectAndQueueFile("Import PDF", []runtime.FileFilter{
+		{DisplayName: "PDF documents", Pattern: "*.pdf"},
+	}, map[string]string{".pdf": "pdf"})
+}
+
+func (a *App) SelectAndQueueTranscript() (jobs.Job, error) {
+	return a.selectAndQueueFile("Import transcript", []runtime.FileFilter{
+		{DisplayName: "Transcript files", Pattern: "*.txt;*.srt;*.vtt"},
+	}, map[string]string{".txt": "transcript_file", ".srt": "transcript_file", ".vtt": "transcript_file"})
+}
+
+func (a *App) selectAndQueueFile(title string, filters []runtime.FileFilter, types map[string]string) (jobs.Job, error) {
 	if a.manager == nil {
 		return jobs.Job{}, fmt.Errorf("background job manager is not configured")
 	}
 	path, err := runtime.OpenFileDialog(a.context(), runtime.OpenDialogOptions{
-		Title: "Import source file",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Supported sources", Pattern: "*.pdf;*.txt;*.srt;*.vtt"},
-			{DisplayName: "PDF documents", Pattern: "*.pdf"},
-			{DisplayName: "Transcript files", Pattern: "*.txt;*.srt;*.vtt"},
-		},
+		Title: title, Filters: filters,
 	})
 	if err != nil || path == "" {
 		return jobs.Job{}, err
 	}
-	sourceType := "transcript_file"
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".txt", ".srt", ".vtt":
-	case ".pdf":
-		sourceType = "pdf"
-	default:
+	extension := strings.ToLower(filepath.Ext(path))
+	sourceType, ok := types[extension]
+	if !ok {
 		return jobs.Job{}, fmt.Errorf("unsupported source file %q", filepath.Ext(path))
 	}
 	return a.manager.Enqueue(a.context(), source.Request{Type: sourceType, URI: path})

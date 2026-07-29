@@ -28,6 +28,9 @@ func TestCheckerReportsAvailableModelAndTools(t *testing.T) {
 	if len(report.Checks) != 5 {
 		t.Fatalf("got %d checks", len(report.Checks))
 	}
+	if len(report.Tools) != 3 || report.Tools[0].Path != tool {
+		t.Fatalf("unexpected tool settings: %#v", report.Tools)
+	}
 	for _, check := range report.Checks {
 		if check.Status != "ready" {
 			t.Fatalf("%s status = %q: %s", check.ID, check.Status, check.Message)

@@ -206,7 +206,9 @@ Tutorio resolves configuration in this order:
 
 If no configuration exists, Tutorio creates one at the resolved platform path on first launch. It records absolute paths for supported tools when they can be discovered from the application environment or common installation locations, and otherwise retains editable command-name defaults. Existing configuration files are never overwritten.
 
-Copy `config.example.yaml` to `config.yaml` in the repository root when you want a project-specific development configuration for `wails dev`. The startup log reports the selected path and Ollama model. The library also shows a non-blocking local-setup panel when Ollama, the configured model, or a source-specific tool cannot be found. Use **Open configuration** from that panel to edit the generated file, then restart Tutorio to apply configuration changes. Missing `yt-dlp` affects YouTube compilation only; missing Poppler affects PDF extraction or previews without preventing access to saved guides.
+Copy `config.example.yaml` to `config.yaml` in the repository root when you want a project-specific development configuration for `wails dev`. The startup log reports the selected path and Ollama model. The library also shows a non-blocking local-setup panel when Ollama, the configured model, or a source-specific tool cannot be found. Each executable path can be validated and saved independently in that panel; Tutorio updates only that tool-path setting and activates it immediately for new work. No restart is required.
+
+Missing `yt-dlp` disables YouTube compilation only. Missing `pdftotext` disables PDF import, while TXT/SRT/VTT import remains available. Missing `pdftocairo` disables PDF page previews but does not prevent PDF guide generation or access to saved guides. The generated configuration path remains visible for users who prefer to edit YAML manually; values changed outside Tutorio are applied on the next launch.
 
 ```yaml
 ollama:
