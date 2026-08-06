@@ -89,7 +89,7 @@ This repository provides a buildable Wails application and the architectural spi
 - active-section timing, slow-call indicators, inspectable local model diagnostics, source-neutral extracted-text metrics, and separate prompt/generation token rates for model speed comparisons.
 - verified transcript excerpts, clickable source timestamps, and exact PDF evidence previews.
 - section-level overviews, prerequisite deduplication, and locally bundled KaTeX formula rendering.
-- visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and Markdown export.
+- visible source sections, guide editing, single-section regeneration, source-grounded deep dives, and portable HTML/Markdown export.
 - collapsible guide sections that double as a compact index, plus compact reference blocks for supporting material.
 - SQLite storage and a Wails guide library/reader.
 
@@ -150,7 +150,7 @@ Package responsibilities:
 | `internal/storage/sqlite` | SQLite connection, schema, guide repository |
 | `internal/config` | YAML configuration and local defaults |
 | `internal/ui` | Thin Wails-facing application API |
-| `internal/exporter` | Output contract and Markdown implementation |
+| `internal/exporter` | Output contract and portable HTML/Markdown implementations |
 
 Interfaces are owned near the code that consumes their behavior and kept small. `context.Context` crosses every operation that can block. Dependencies are assembled only in the root `main.go`; no package-level mutable state is used. Wails v2's binding generator requires its Go entrypoint at the project root, so this is the one intentional variation from the usual `cmd/app/main.go` layout.
 
@@ -175,6 +175,15 @@ For a newly generated PDF guide, selecting a citation opens a lightweight eviden
 *PDF citations open exact extracted evidence alongside a page preview, with the original document still available when more context is needed.*
 
 For production evolution, add numbered embedded migrations rather than editing an already-released migration.
+
+### Exporting guides
+
+The reader's **Export** menu offers:
+
+- **HTML** — the recommended sharing format. It produces one dependency-free, responsive file with embedded styling, print rules, structured steps, commands, shortcuts, warnings, and source links. It can be opened offline in phone and desktop browsers or printed to PDF by the recipient.
+- **Markdown** — a lightweight source format for note-taking tools, version control, and further editing.
+
+YouTube timestamp links remain portable. Links to an original local PDF continue to refer to its path on the exporting computer, so recipients will not have that source document unless it is shared separately. Exact evidence text remains available in Tutorio but is not yet bundled into an exported source archive.
 
 ### Generation metrics
 

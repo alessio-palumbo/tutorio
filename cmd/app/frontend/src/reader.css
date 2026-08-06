@@ -2,6 +2,12 @@
   margin-top: 42px;
 }
 .reader-actions { display: flex; justify-content: space-between; align-items: center; }
+.export-menu { position: relative; margin: 42px 0 28px; }
+.export-menu summary { padding: 8px 13px; cursor: pointer; list-style: none; }
+.export-menu summary::-webkit-details-marker { display: none; }
+.export-menu[open] summary { background: #eef2ea; }
+.export-menu > div { position: absolute; z-index: 5; top: calc(100% + 7px); right: 0; display: grid; gap: 6px; min-width: 150px; padding: 8px; border: 1px solid #d8d4c8; border-radius: 9px; background: #fff; box-shadow: 0 10px 24px #25362b20; }
+.export-menu > div button { padding: 10px 14px; text-align: left; }
 .section-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .section-actions button { padding: 8px 10px; }
 .step-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }

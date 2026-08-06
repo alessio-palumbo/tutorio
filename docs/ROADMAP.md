@@ -9,7 +9,7 @@ The roadmap deliberately grows capabilities by adding adapters and use cases aro
 - TXT, SRT, and VTT parsing; cleaning; Unicode-aware bounded segmentation with YouTube chapter, PDF heading, and long-pause boundaries.
 - Ollama generate adapter and structured guide schema.
 - Structural verification and SQLite persistence.
-- Wails compile/library/reader shell with inline step editing and Markdown export.
+- Wails compile/library/reader shell with inline step editing and portable HTML/Markdown export.
 - Background queue with cancellation, persisted sections, targeted retry, and automatic restart recovery.
 - Active-section diagnostics, visible source sections, and persisted source-grounded deep dives.
 - Native TXT/SRT/VTT/PDF selection, source-neutral references, and page-aware text PDF ingestion.
