@@ -30,6 +30,7 @@ type App struct {
 	logger     *slog.Logger
 	progress   *EventReporter
 	exporter   exporter.Exporter
+	html       exporter.Exporter
 	manager    *jobs.Manager
 	evidence   evidence.Repository
 	visual     evidence.VisualProvider
@@ -44,6 +45,11 @@ type ToolPathApplier interface {
 
 func (a *App) WithVisualProvider(provider evidence.VisualProvider) *App {
 	a.visual = provider
+	return a
+}
+
+func (a *App) WithHTMLExporter(output exporter.Exporter) *App {
+	a.html = output
 	return a
 }
 
@@ -292,11 +298,22 @@ func (a *App) ExportMarkdown(id string) (string, error) {
 	if a.exporter == nil {
 		return "", fmt.Errorf("Markdown exporter is not configured")
 	}
+	return a.exportGuide(id, a.exporter, "Markdown guide", "*.md")
+}
+
+func (a *App) ExportHTML(id string) (string, error) {
+	if a.html == nil {
+		return "", fmt.Errorf("HTML exporter is not configured")
+	}
+	return a.exportGuide(id, a.html, "HTML guide", "*.html")
+}
+
+func (a *App) exportGuide(id string, output exporter.Exporter, displayName, pattern string) (string, error) {
 	value, err := a.guides.Get(a.context(), id)
 	if err != nil {
 		return "", err
 	}
-	content, err := a.exporter.Render(a.context(), value)
+	content, err := output.Render(a.context(), value)
 	if err != nil {
 		return "", err
 	}
@@ -305,7 +322,7 @@ func (a *App) ExportMarkdown(id string) (string, error) {
 	if name == "" {
 		name = "tutorio-guide"
 	}
-	path, err := runtime.SaveFileDialog(a.context(), runtime.SaveDialogOptions{DefaultFilename: name + a.exporter.Extension(), Filters: []runtime.FileFilter{{DisplayName: "Markdown guide", Pattern: "*.md"}}})
+	path, err := runtime.SaveFileDialog(a.context(), runtime.SaveDialogOptions{DefaultFilename: name + output.Extension(), Filters: []runtime.FileFilter{{DisplayName: displayName, Pattern: pattern}}})
 	if err != nil || path == "" {
 		return path, err
 	}

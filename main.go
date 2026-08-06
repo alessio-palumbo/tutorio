@@ -12,6 +12,7 @@ import (
 
 	"github.com/alessio/tutorio/internal/config"
 	"github.com/alessio/tutorio/internal/diagnostics"
+	htmlexporter "github.com/alessio/tutorio/internal/exporter/html"
 	"github.com/alessio/tutorio/internal/exporter/markdown"
 	"github.com/alessio/tutorio/internal/guide"
 	"github.com/alessio/tutorio/internal/jobs"
@@ -107,6 +108,7 @@ func main() {
 		"yt-dlp": cfg.Tools.YTDLPPath, "pdftotext": cfg.Tools.PDFToTextPath, "pdftocairo": cfg.Tools.PDFToCairoPath,
 	})
 	app := appui.NewApp(pipeline, repository, evidenceRepository, logger, markdown.New(), manager, progress).
+		WithHTMLExporter(htmlexporter.New()).
 		WithVisualProvider(pdfPreview).
 		WithDiagnostics(readiness, configPath).
 		WithToolPathApplier(runtimeTools{youtube: youtubeSource, pdf: pdfSource, preview: pdfPreview, checker: readiness})
